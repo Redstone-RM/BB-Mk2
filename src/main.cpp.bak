@@ -1,0 +1,323 @@
+/* -------------------------------------- */
+/* 
+Hardware Bum Biter Bot MK 2.0
+   
+ *  
+ *  15 Feb 2021 RM Created. 
+ *      - Acknowledgements. This was code is shamelssly stolen from "Test of LMX multi-tasking on ARDUINO" by David P. Anderson https://github.com/dprg/lmx
+ *        The nickname was given by my daughter Alyssa who said she wanted a robot that would patrol the house and bite bad guys in the bum but also be fun and bring you stuff.
+ *      Hardware: 
+ *            - Mega2560. 
+ *            - TB6612fng Motor Driver with 2x TT motors (in a fliped/mirrored configuration because I like pain I guess.)
+ *            - HC-SRO4 Sensor
+ *            - Passive Piezo speaker for 8bit jams
+ *  
+ *     Software:
+ *            - libtask LMX from D.P. Anderson  as a scheduler 
+ *            - Currently Porting from Mk1. Unamed custom written TB6612fng Motor Driver functions that should probably move to a lib later.
+ * 
+ *  TO-DO List - Too long for now.
+ *            
+ *               
+ *  
+ */
+/* -------------------------------------- */
+
+
+
+/* -------------------------------------- */
+#include <Arduino.h>
+#include <stdio.h>
+#include <task.h>
+#include <log.h>
+#include <sysclock.h>
+
+/* -------------------------------------- */
+#define VERSION "Bum Biter MK-2.0.1"
+#define BAUDRATE 57600
+#define PRINTF Serial.println
+#define SPRINTF sprintf
+
+/* ------------ <dpa> -------------------------- */
+void printkbuf(char *s) {  // dpa
+   PRINTF(s);
+}
+/* Choose one of the below:  */ 
+// #define WAIT(d)  { d *= 10; cnt = 0; while (cnt++ < d) defer(); }
+// #define WAIT(d)  { msleep(d); }
+#define WAIT(d)  { wake_after(d); }
+/* ------------</dpa> -------------------------- */
+
+
+/* -------------Definitions ------------------------- */
+
+/*   Pin Definitions   */
+
+#define LED_HEARTBEAT_PIN 13
+
+// motor control pins. 
+
+// keep in mind the PWM defines must be on PWM pins
+#define STBY 34
+#define BIN2 36
+#define BIN1 38
+#define AIN1 40                                       
+#define AIN2 42
+#define PWMA 44
+#define PWMB 46
+
+
+// sound control
+#define BEEP 32 // hooked to passive piezo buzzer.
+
+// HC-SR04 Ultra-sonic Echo Location sensor installed.
+//#define trigPin 2
+//#define echoPin 11
+
+/* Layer 1 function alias definitions    */
+//  heartbeat LED function.
+#define LED1_ON  digitalWrite(LED_HEARTBEAT_PIN, HIGH) // onboard LED used for heartbeat.
+#define LED1_OFF digitalWrite(LED_HEARTBEAT_PIN, LOW)  // onboard LED used for heartbeat.
+
+   // Wake up motor driver from low power standby
+#define MOTOR_WAKE digitalWrite(STBY, HIGH) 
+
+
+/* STATE VARIABLES */
+// int bot_run_lvl  = 5; // Set default runlevel.
+
+
+/* ----------- Functions --------------------------- */
+
+
+/* ------------ <dpa> -------------------------- */
+/* Count idle cycles per second dpa original function */ 
+unsigned long idle_cnt;
+
+void cpu_idle(ASIZE ignored)
+{
+    unsigned long t;
+    unsigned long cnt;
+    
+    t = sysclock + 1000;
+    while (1) {
+        idle_cnt = proc_counter;
+        proc_counter = 0;
+        // WAIT(1000);
+        PERIOD(&t,1000);
+    }
+}
+
+/* -------------------------------------- */
+void console_log(ASIZE delay)
+{
+  unsigned long cnt;
+  
+  while (1) {
+    WAIT(delay);
+    PRINTF ("STATUS: ONLINE \n"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
+   
+  }  
+}
+
+/* -------------------------------------- */
+/* Heartbeat onbard LED. flash on and hang on a semaphore */
+int flash_sem;
+
+void led(ASIZE delay)
+{
+    int i;
+    unsigned long cnt;
+    
+    while (1) {
+        semaphore_obtain(&flash_sem);
+        for (i = 0; i < 2; i++) {
+          LED1_ON;
+          WAIT(delay);
+          LED1_OFF;
+          WAIT(delay);
+        }
+    }
+}
+
+/* Flash led periodically */
+
+void flash(ASIZE delay)
+{
+  unsigned long cnt;
+    while (1) {
+      semaphore_release(&flash_sem);
+      WAIT(delay);
+    }
+}
+/* ----------------------------------------- */
+
+
+
+
+void stats_task(ASIZE delay) /*  <dpa>  */
+{
+    TSIZE t;
+    t = sysclock + delay;
+
+    while (1) {
+      // WAIT(delay);
+      PERIOD(&t,delay);
+      PRINTF("");
+      SPRINTF(sbuf,"# Sysclock\t%ld\tSampleclock\t%ld\tIdleHz\t%ld",
+              sysclock,sampleclock,idle_cnt);
+      PRINTF(sbuf);
+      PRINTF("");
+      print_llist(1);
+    }
+}
+
+/* 
+-----------------------------------------  INIT Section ------------------------------------------
+ TBD - Emulate a sysV type init function system. 
+
+// init functions are named init_runlevel_class_name
+// runlevels 
+// 0 - Reserved        - unused currently
+// 1 - Primary Systems - init_1_led_heartbeat() , 
+// 2 - Sensors Systems -  
+// 3 - Motor Controls  - init_3_motors_setup() , 
+--------------------------------------------------------------------------------------------------
+*/
+
+
+/* LVL 1 INIT Functions */
+
+// led heartbeat init 
+void init_1_led_heartbeat(void)
+{
+     pinMode(LED_HEARTBEAT_PIN, OUTPUT); 
+}
+
+/* ----------------------------------------- */
+
+
+/* LVL 3 INIT Functions */
+
+void init_3_motors_setup() {
+   pinMode(STBY, OUTPUT);
+
+   pinMode(AIN1, OUTPUT);
+   pinMode(AIN2, OUTPUT);
+   pinMode(PWMA, OUTPUT);
+   
+   pinMode(BIN1, OUTPUT);
+   pinMode(BIN2, OUTPUT);
+   pinMode(PWMB, OUTPUT);
+      // Wake up motor driver
+   PRINTF("<INIT>\tinit_3_motors_setup");
+}
+
+
+void stop() {
+   // Full stop Cap't. Work on migrating this to a decellerate funct in future.
+   digitalWrite(AIN1, HIGH);
+   digitalWrite(AIN2, HIGH);
+   analogWrite(PWMA,0);
+   
+   digitalWrite(BIN1, HIGH);
+   digitalWrite(BIN2, HIGH);
+   analogWrite(PWMB,0);
+
+}
+
+void motor_test_a (ASIZE delay)
+{
+   MOTOR_WAKE;
+   int speed = 150;
+   digitalWrite(AIN1, HIGH);
+   digitalWrite(AIN2, LOW);
+   analogWrite(PWMA, speed);
+   WAIT(delay);
+   stop();
+
+   digitalWrite(AIN1, LOW);
+   digitalWrite(AIN2, HIGH);
+   analogWrite(PWMA, speed);
+   WAIT(delay);
+   stop();
+   WAIT(5000);
+
+}
+
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+/* system_init  - Add all other runlevel init functions  */
+void system_init(void)
+{
+    /* AVR & ARM Teesy3.1  */
+    init_1_led_heartbeat(); // LED heartbeat
+    sysclock_init(); //  <dpa>. clock.
+    Serial.begin(BAUDRATE); 
+}
+/* ----------------------------------------- */
+
+/* ------------ <dpa> -------------------------- */
+/* Create signon and terminate task */
+
+void signon(ASIZE version)
+{
+  PRINTF(VERSION);
+  wake_after(2000);
+  PRINTF("# SIGNON Messages signing off!\n");
+  DELAY(1000);
+  terminate();
+}
+/* ----------------------------------------- */
+
+/* 
+-----------------------------------------  MAIN ------------------------------------------
+
+ this is for the Arduino IDE "sketch" set up 
+------------------------------------------------------------------------------------------
+*/
+
+void setup()
+
+{
+  
+    system_init();
+    printv = printkbuf;
+
+
+    PRINTF("Howdy Console!\n");
+
+    #if ((MACHINE == MACH_AVR) || (MACHINE == MACH_ARM)) /* ARM is Teensy3.1 */ // <dpa> libtask set in task.h
+    delay(1500);   /* hardware delay, sysclock not running yet */
+    #endif
+
+    pid_count = 0; current = 0;
+    //create_task((char *)"MOTOR_TEST_A",motor_test_a,2000, MINSTACK );
+    create_task((char *)"LED",led,250, MINSTACK);
+    create_task((char *)"FLASH",flash,850,MINSTACK);
+    create_task((char *)"MOTD",console_log,30000,MINSTACK);
+    create_task((char *)"IDLE",cpu_idle,0,MINSTACK);
+    create_task((char *)"STATS",stats_task,10000,MINSTACK*4);
+    create_task((char *)"SIGNON",signon,1,MINSTACK*4);
+
+
+    scheduler();
+    PRINTF("Should never get here.");
+
+    while (1);
+    #if ((MACHINE != MACH_AVR) && (MACHINE != MACH_ARM))
+    return 0;
+    #endif
+}
+
+void loop() 
+{
+  /* Noting to see here. Move along. Not the droid you're looking for. */
+  asm("nop");
+}
+
+
+
+
+/* EOF */

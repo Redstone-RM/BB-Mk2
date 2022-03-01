@@ -1,0 +1,35 @@
+void back_svc_ping( ASIZE delay){ // PING service function.
+
+    float duration, distance; 
+  while (1)
+  {
+    // Write 10 MicroSec pulse to trigger pin.
+   digitalWrite(trigPin,LOW);// ensure set LOW to start. 
+   delayMicroseconds(2); 
+   digitalWrite(trigPin,HIGH);
+   delayMicroseconds(10);
+   digitalWrite(trigPin,LOW);
+
+   // measure response
+   duration = pulseIn(echoPin,HIGH);
+   // calculate distance in CM
+   distance = (duration / 2) * 0.0343; // speed of sound at sea level 20C 343 m/s  adjust for cond?
+
+   // send results to serial montior
+
+   //Serial.print ("Distance = ");
+
+   if (distance >= 400 || distance <= 2 ){
+      // Serial.println("Out Of Range");
+      distance = 0;
+      bot_sen_sonar_ping = distance;    
+      
+   } else {
+      // Serial.print(distance);
+      // Serial.print(" cm\n");
+      // WAIT(1000);
+      bot_sen_sonar_ping = distance;
+   }
+    WAIT(delay);
+  }  
+}

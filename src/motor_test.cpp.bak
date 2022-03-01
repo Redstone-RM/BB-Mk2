@@ -1,0 +1,110 @@
+#include <Arduino.h>
+
+// MOTOR TEST SCRIPT
+
+//Sensor
+// Pins for all inputs, keep in mind the PWM defines must be on PWM pins
+
+// motor control pins.
+#define STBY 34
+#define BIN2 36
+#define BIN1 38
+#define AIN1 40                                       
+#define AIN2 42
+#define PWMA 44
+#define PWMB 46
+
+
+
+// Motor setup notes
+// MOTOR A = RIGHT
+// MOTOR B = LEFT
+// FWD = HIGH/LOW
+// REV = LOW/HIGH
+// BRAKE = HIGH/HIGH
+// Motor MotorRight = Motor(AIN1, AIN2, PWMA, offsetA, STBY); // MotorLeft, MotorRight
+// Motor MotorLeft = Motor(BIN1, BIN2, PWMB, offsetB, STBY);
+
+
+
+
+
+void stop() {
+   // Full stop Cap't. Work on migrating this to a decellerate funct in future.
+   digitalWrite(AIN1, HIGH);
+   digitalWrite(AIN2, HIGH);
+   analogWrite(PWMA,0);
+   
+   digitalWrite(BIN1, HIGH);
+   digitalWrite(BIN2, HIGH);
+   analogWrite(PWMB,0);
+
+}
+
+void test_motor_a()
+{
+   int speed = 150;
+   digitalWrite(AIN1, HIGH);
+   digitalWrite(AIN2, LOW);
+   analogWrite(PWMA, speed);
+   delay(2000);
+   stop();
+
+   digitalWrite(AIN1, LOW);
+   digitalWrite(AIN2, HIGH);
+   analogWrite(PWMA, speed);
+   delay(2000);
+   stop();
+
+}
+
+void test_motor_b()
+{
+   int speed = 150;
+   digitalWrite(BIN1, HIGH);
+   digitalWrite(BIN2, LOW);
+   analogWrite(PWMB, speed);
+   delay(2000);
+   stop();
+
+   digitalWrite(BIN1, LOW);
+   digitalWrite(BIN2, HIGH);
+   analogWrite(PWMB, speed);
+   delay(2000);
+   stop();
+
+}
+
+
+
+void setup()
+{
+   // setup OUTPUT pins
+   pinMode(AIN1, OUTPUT);
+   pinMode(AIN2, OUTPUT);
+   pinMode(PWMA, OUTPUT);
+   pinMode(STBY, OUTPUT);
+   pinMode(BIN1, OUTPUT);
+   pinMode(BIN2, OUTPUT);
+   pinMode(PWMB, OUTPUT);
+   pinMode(13, OUTPUT);
+
+
+}
+
+void loop()
+{
+   digitalWrite(13, HIGH);
+   delay(1000);
+   digitalWrite(13, LOW);
+   delay(1000);
+
+   // Wake up motor driver
+   digitalWrite(STBY, HIGH);
+  // motor diag stuff.
+   test_motor_a();
+   delay(2000);
+   test_motor_b();
+   delay(2000);
+
+}
