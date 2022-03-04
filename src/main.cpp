@@ -1,7 +1,12 @@
 /* -------------------------------------- */
 /* 
 Bum Biter Bot MK 2.0
- *  02 Mar 2022 RM - Added wheel encoder counters and related funstions.
+ *  03 Mar 2022 RM - Moved wheel encoder reading to a service used an atomic_block for less erratic results from reading the interrupt diriven variables.
+                      - Working on PID control.
+                        - Got RPM conunt working. It could probably be better.
+                        - Added distance and speed calc using wheel measurments                        
+
+ *  02 Mar 2022 RM - Added wheel encoder counters and related functions.
                    - Noticed DEBUG printing to conlog was getting close to maxstack. increased it to 128 (maxstack*2 )
  *  28 Feb 2022 RM - Adding Second array of Rear facing sensors. Sharp Digital IR 20CM  and HC-SR04. Pins. 
                    - Moved analog IR sensors to left and right.
@@ -36,7 +41,13 @@ Bum Biter Bot MK 2.0
  * 
  *  TO-DO List: 
  *            - Add ability to send some console DEBUG log info back over serial BT console.
- *            - Add visual feedback RGB LEDs 
+ *            - Add visual feedback RGB LEDs
+ *            - Add Speaker. 
+ *            - Add IMU
+ *            - BUG. When Arduino reboots BT connection is problematic.
+ *              |-> Connect the appropriate reset ping to the BT module and have it restart when the sketch does.
+ *                |-->Make sure above is run time configurable option ALSO a tirggerable event.
+ * 
  *            - Too long for now.
  *         
  *               
@@ -50,7 +61,7 @@ Bum Biter Bot MK 2.0
 
 /* -------------------------------------- */
 #include <Arduino.h> // Only Needed for PlatformIO.
-#include <util/atomic.h> // Using ATOMIC_BLOCK macro for wheel encoder reading.
+#include <util/atomic.h> // Using ATOMIC_BLOCK macro for wheel encoder reading of volitile ints.
 
 // LMX 
 #define BAUDRATE 57600
@@ -104,13 +115,18 @@ void printkbuf(char *s) {  // dpa
 // motor A
 #define MTRA_ENCA 2 // Motor A encoder output A must be on interrupt pin.
 #define MTRA_ENCB 3 // Motor A encoder output on B on an interrupt pin.
+#define MTRA_CLICKS_PER 132 // encoder clicks per bot wheel rotation.
+#define MTRA_WHEELD 60.3 // wheel D in mm
+
+
 // motor B
 #define MTRB_ENCA 19 // Motor B encoder output A must be on interrupt pin. // remember the motors are flipped
 #define MTRB_ENCB 18 // Motor B encoder output B must be on interrupt pin.
+#define MTRB_CLICKS_PER  132 // encoder clicks per bot wheel rotation.
+#define MTRB_WHEELD 60.3 // wheel D in mm
 
 // These Interface with Motor Driver. TB6612fng H-Bridge
 // keep in mind the PWM defines must be on PWM pins
-
 #define MOTOR_BIN2 34
 #define MOTOR_BIN1 36
 #define MOTOR_STBY 38
@@ -160,29 +176,37 @@ scope_type_name
    types :           init  - Initializaion variables
                      ctl   - Controls. Variable inputs set by user or other nodes.
                      sen   - Sensor Data. Readings from various sensor processing tasks.
-                     cal   - Calculated variables
+                     cal   - Calculating variables. Raw vars used in other calcuations
+                     cfg   - Configureable stuff.
                      
 
 */
 
-int bot_init_runlvl  = 5; // Current init level.
+int bot_init_runlvl  = 5; // Default init level.
 char bot_sys_debug[] = ""; // string to hold debug output.
 
-// MOTOR GLOBALS
+/********** MOTOR GLOBALS **********/
 
-int mtr_ctl_speed = 150; // CFG > efault drive speed. tweak these as req either here or runtime
+int mtr_ctl_speed = 150; // CFG > default drive speed. tweak these as req either here or runtime
 int mtr_ctl_pivot_speed = 150; // CFG > default pivot turn speed. 
-
 
 int mtr_ctl_speed_a = 0;  // to set motor a speed
 int mtr_ctl_speed_b = 0;  // used set motor b speed
 
+volatile int mtr_cal_pos_a = 0; // motor A positional counts +/- // volatiles are read in an ATOMIC_BLOCK
+volatile int mtr_cal_pos_b = 0; // motor B positional counts +/- volatiles are read in an ATOMIC_BLOCK
+float mtr_sen_rpm_a = 0; // Rought RPM calc per motor
+float mtr_sen_rpm_b = 0; // Rought RPM calc per motor
 
-volatile int mtr_cal_pos_a = 0; // motor A positional counts +/-
-volatile int mtr_cal_pos_b = 0; // motor B positional counts +/-
+float mtr_sen_speed_a =  0; // cm per minute ?
+float mtr_sen_speed_b =  0; // cm per minute ?
+
+int mtr_sen_pos_a = 0; // SAFE readable versions of above motor postional counts.
+int mtr_sen_pos_b = 0; // SAFE readable versions of above motor postional counts.
 
 
-// SENSOR GLOBALS
+
+/********** SENSOR GLOBALS **********/
 int bot_sen_sonar_fwd_ping = 1; // Distance reported from fwd Ultra-Sonic Sensor rounded up to whole CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
 int bot_sen_sonar_rear_ping = 1; // Distance reported from rear Ultra-Sonic Sensor rounded up CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
 int bot_sen_sonar_ping_cnt = 5; // how many pings to sample for avg 
@@ -241,9 +265,19 @@ void console_log(ASIZE delay)
     PRINTF("REAR PING:\t");
     PRINTF (bot_sen_sonar_rear_ping); 
     
-    PRINTF("Wheels:\t");
-    PRINTF (mtr_cal_pos_a);
-    PRINTF (mtr_cal_pos_b);
+    PRINTF("Wheels: A  B\t");
+    PRINTF (mtr_sen_pos_a);
+    PRINTF (mtr_sen_pos_b);
+    PRINTF("RPM Velocity A  B :\t");
+    PRINTF (mtr_sen_rpm_a );
+    PRINTF (mtr_sen_rpm_b);
+
+    PRINTF("SPEED  Meters per min");
+    PRINTF(mtr_sen_speed_a);
+    PRINTF(mtr_sen_speed_b);
+
+      
+
 
 /*    
     PRINTF("IR Right:\t");
@@ -355,23 +389,48 @@ void init_2_IR_setup(){
 /* LVL 3 INIT Functions */
 
 void bot_mtr_a_readEncoder(){  // run on INT and increment or decrement the wheel counter. Each wheel is as independant as possible.
+  // Read encoder B when encoder A rises
   int mtra_encb = digitalRead(MTRA_ENCB);
+  int increment = 0;
   if(mtra_encb>0){
-    mtr_cal_pos_a++;
+    increment++;
+    mtr_cal_pos_a++; // these globals are volatile. They are read in an ATOMIC_BLOCK    
   }
   else {
-    mtr_cal_pos_a--;
+    increment--;
+    mtr_cal_pos_a--; // these globals are volatile. They are read in an ATOMIC_BLOCK 
+
   }
+
+   /*
+      // Compute velocity with method 2
+      long currT = micros();
+      float deltaT = ((float) (currT - mtr_cal_prevT_a ))/1.0e6;
+      mtr_cal_vel_a  = increment/deltaT;
+      mtr_cal_prevT_a = currT;
+    */
+
 }
 
 void bot_mtr_b_readEncoder(){
+  int increment = 0;
   int mtrb_encb = digitalRead(MTRB_ENCB);
   if(mtrb_encb>0){
-    mtr_cal_pos_b++;
+    increment++;
+    mtr_cal_pos_b++;// these globals are volatile. They are read in an ATOMIC_BLOCK 
   }
   else {
-    mtr_cal_pos_b--;
+    increment--;
+    mtr_cal_pos_b--; // these globals are volatile. They are read in an ATOMIC_BLOCK 
+
   }
+/*
+    // Compute velocity with method 2
+  long currT = micros();
+  float deltaT = ((float) (currT - mtr_cal_prevT_b ))/1.0e6;
+  mtr_cal_vel_b  = increment/deltaT;
+  mtr_cal_prevT_b = currT;
+  */
 }
 
 void init_3_motors_setup() {
@@ -390,8 +449,8 @@ void init_3_motors_setup() {
   pinMode(MTRB_ENCA, INPUT);  
   pinMode(MTRB_ENCB, INPUT);
   
-  attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), bot_mtr_a_readEncoder, RISING);
-  attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), bot_mtr_b_readEncoder, RISING);
+  attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), bot_mtr_a_readEncoder, RISING); // set interupts
+  attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), bot_mtr_b_readEncoder, RISING); // set interups
 
   if (DEBUG){PRINTF("<INIT>\tinit_3_motors_setup"); } 
   
@@ -532,8 +591,8 @@ void bot_ctl_backoffturn_right(int speed){
 void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotation (ie. CW)
     MOTOR_WAKE;
     if(DEBUG){
-    PRINTF("PIVOT TURN REQESTED ");
-    PRINTF(rotation);
+    //PRINTF("PIVOT TURN REQESTED ");
+    //PRINTF(rotation);
     }
     //int test = rotation;
     //PRINTF(test);
@@ -633,14 +692,37 @@ void svc_ping( ASIZE delay){ // PING service function.
   }  
 }
 
-void svc_encoders(ASIZE delay){ // Wheel encoder update function
-  /* GLOBALS
-  int mtr_cal_pos_a = 0; // motor A positional counts +/-
-  int mtr_cal_pos_b = 0; // motor B positional counts +/- 
-  */
+void svc_encoders(ASIZE ignored){ // Wheel encoder update function
+    while(1){
+     int posPrev_a = mtr_sen_pos_a;
+     int posPrev_b = mtr_sen_pos_b;
+     float mtr_a_roations = 0;
+     float mtr_b_roations = 0;
 
+      // This ATOMIC_BLOCK reads the encoders and calculates the RPM for each motor during the interrupts then moves the data to globals that we can use. 
+      ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
+        mtr_sen_pos_a = mtr_cal_pos_a; 
+        mtr_sen_pos_b = mtr_cal_pos_b; 
+      
+        // mtr_sen_vel_a = mtr_cal_vel_a;
+        // mtr_sen_vel_b = mtr_cal_vel_b;
+      mtr_a_roations =  (abs( mtr_sen_pos_a - posPrev_a   )  * 600) / MTRA_CLICKS_PER ; // 600 (60sec * 10 times per sec for RPM) | encoder clicks per wheel rotation
+      mtr_b_roations =  (abs( mtr_sen_pos_b - posPrev_b )  * 600) / MTRB_CLICKS_PER ; // 240 (60sec * 10 times per sec for RPM) | encoder clicks per wheel rotation
+      mtr_sen_rpm_a = mtr_a_roations;
+      mtr_sen_rpm_b = mtr_b_roations;
 
+      mtr_sen_speed_a = mtr_a_roations * ( (MTRA_WHEELD * PI) / 1000 ); 
+      mtr_sen_speed_b = mtr_b_roations * ( (MTRB_WHEELD * PI) / 1000 );
+    
+      }
 
+      WAIT(100); // Samples encoder counts 10 times per sec. much faster than 100ms loop seems to give erratic results. Not enough clicks for good math.
+      
+
+    
+
+  }
+ 
 }
 
 void bot_cruise ( ASIZE delay){ // Cruise Behavior
@@ -805,7 +887,7 @@ void signon(ASIZE version)
 void setup()
 
 {
-  
+ 
     system_init();
     printv = printkbuf;
 
@@ -819,8 +901,8 @@ void setup()
     pid_count = 0; current = 0;
    // create_task((char *)"MOTOR_TEST_A",motor_test_a,2000, MINSTACK );
    //  create_task((char *)"MOTOR_TEST_B",motor_test_b,2000, MINSTACK );
-   create_task((char *)"CRUISE",bot_cruise,300, MINSTACK);
-    
+   // create_task((char *)"CRUISE",bot_cruise,300, MINSTACK);
+    //create_task((char *)"ENCDR",svc_read_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored.
 
     /**************TASKS *******************/
     
@@ -830,18 +912,17 @@ void setup()
     create_task((char *)"SIGNON",signon,1,MINSTACK*4);
     
     // Level 1 System Tasks
-    create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and getting
+    create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and getting with LMX
     create_task((char *)"FLASH",flash,800,MINSTACK); // heatbeat. kept as example of how to use semaphore setting
-    create_task((char *)"CONLOG",console_log,10000,MINSTACK*2); // logging to serial output
+    create_task((char *)"CONLOG",console_log,2000,MINSTACK*2); // logging to serial output
 
     // Level 2 Services     
+    create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service.  250ms. Delay is ignored.
     create_task((char *)"PING",svc_ping,10, MINSTACK); // IR and Sonar Ping service
 
     // Level 3 Controls
-    create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth contorler
+    create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth User Input Contorler
 
-
-    
     scheduler(); // Main LMX task scheduler
     PRINTF("Should never get here."); // Leave this alone.
 
