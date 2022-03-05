@@ -1,7 +1,12 @@
 /* -------------------------------------- */
 /* 
 Bum Biter Bot MK 2.0
- *  03 Mar 2022 RM - Moved wheel encoder reading to a service used an atomic_block for less erratic results from reading the interrupt diriven variables.
+*   04 Mar 2022 RM - Motor function changes
+                      -> the 3 functions with control of the motor set the global variables for rotation. 
+                   -Fixed up the motor debug info output.
+                   
+
+ *  03 Mar 2022 RM - Moved wheel encoder reading to a service used an atomic_block for less erratic results from reading the interrupt driven variables.
                       - Working on PID control.
                         - Got RPM conunt working. It could probably be better.
                         - Added distance and speed calc using wheel measurments                        
@@ -187,23 +192,26 @@ char bot_sys_debug[] = ""; // string to hold debug output.
 
 /********** MOTOR GLOBALS **********/
 
+// Motor CONTORL
 int mtr_ctl_speed = 150; // CFG > default drive speed. tweak these as req either here or runtime
 int mtr_ctl_pivot_speed = 150; // CFG > default pivot turn speed. 
-
 int mtr_ctl_speed_a = 0;  // to set motor a speed
-int mtr_ctl_speed_b = 0;  // used set motor b speed
+int mtr_ctl_speed_b = 0;  // set motor b speed
 
+// Motor Virtual Sensors
 volatile int mtr_cal_pos_a = 0; // motor A positional counts +/- // volatiles are read in an ATOMIC_BLOCK
 volatile int mtr_cal_pos_b = 0; // motor B positional counts +/- volatiles are read in an ATOMIC_BLOCK
-float mtr_sen_rpm_a = 0; // Rought RPM calc per motor
-float mtr_sen_rpm_b = 0; // Rought RPM calc per motor
-
-float mtr_sen_speed_a =  0; // cm per minute ?
-float mtr_sen_speed_b =  0; // cm per minute ?
-
 int mtr_sen_pos_a = 0; // SAFE readable versions of above motor postional counts.
 int mtr_sen_pos_b = 0; // SAFE readable versions of above motor postional counts.
 
+double mtr_sen_rpm_a = 0.00; // Holds Rough RPM calc per motor
+double mtr_sen_rpm_b = 0.00; // Holds Rough RPM calc per motor
+
+double mtr_sen_speed_a =  0.00; // Meters per minute MPM
+double mtr_sen_speed_b =  0.00; // Meters per minute MPM
+
+int mtr_sen_stat_a = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
+int mtr_sen_stat_b = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
 
 
 /********** SENSOR GLOBALS **********/
@@ -254,28 +262,26 @@ void cpu_idle(ASIZE ignored)
 void console_log(ASIZE delay)
 {
   unsigned long cnt;
+  String debug_msg;
   
   while (1) {
 
     if(DEBUG){
-    PRINTF ("STATUS: ONLINE \n======"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
-    PRINTF("FWD PING:\t");
-    PRINTF (bot_sen_sonar_fwd_ping); 
-    
-    PRINTF("REAR PING:\t");
-    PRINTF (bot_sen_sonar_rear_ping); 
-    
-    PRINTF("Wheels: A  B\t");
-    PRINTF (mtr_sen_pos_a);
-    PRINTF (mtr_sen_pos_b);
-    PRINTF("RPM Velocity A  B :\t");
-    PRINTF (mtr_sen_rpm_a );
-    PRINTF (mtr_sen_rpm_b);
+    PRINTF ("======================== STATUS: ONLINE  ========================"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
+    debug_msg =  ("FWD SONAR :\t") + String (bot_sen_sonar_fwd_ping) + "\t";    
+    debug_msg +=  ("REAR SONAR:\t") + String (bot_sen_sonar_rear_ping) +"\n" ; 
+    debug_msg +=  ("RIGHT IR:\t") + String (bot_sen_ir_right_ping) +"\t";
+    debug_msg +=  ("LEFT IR:\t") + String (bot_sen_ir_left_ping) +"\t";
 
-    PRINTF("SPEED  Meters per min");
-    PRINTF(mtr_sen_speed_a);
-    PRINTF(mtr_sen_speed_b);
+    PRINTF(debug_msg);   
 
+    PRINTF("\n==== MOTORS ====\n#MOTOR\t\tRPM\t\tSPD\t\tROT\t\tCNT");
+    debug_msg =  "Motor A\t\t" + String(mtr_sen_rpm_a) + "\t\t" + String (mtr_sen_speed_a) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a); 
+    PRINTF(debug_msg);
+
+    debug_msg =  "Motor B\t\t" + String(mtr_sen_rpm_b) + "\t\t" + String (mtr_sen_speed_b) + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b); 
+    PRINTF(debug_msg);
+    
       
 
 
@@ -467,10 +473,12 @@ void mtr_ctl_a(bool rev = false, int speed = 0 ) {
       digitalWrite(MOTOR_AIN1, LOW);
       digitalWrite(MOTOR_AIN2, HIGH);
       analogWrite(MOTOR_PWMA, speed);
+      mtr_sen_stat_a = -1;
   } else{ // FWD mtr A
       digitalWrite(MOTOR_AIN1, HIGH);
       digitalWrite(MOTOR_AIN2, LOW);
       analogWrite(MOTOR_PWMA, speed);
+      mtr_sen_stat_a = 1;
   }
 }
 
@@ -482,17 +490,21 @@ void mtr_ctl_b(bool rev = false, int speed = 0 ) {
       digitalWrite(MOTOR_BIN1, LOW);
       digitalWrite(MOTOR_BIN2, HIGH);
       analogWrite(MOTOR_PWMB, speed);
+      mtr_sen_stat_b = -1;
   } else{ // FWD mtr B
       digitalWrite(MOTOR_BIN1, HIGH);
       digitalWrite(MOTOR_BIN2, LOW);
       analogWrite(MOTOR_PWMB, speed);
+      mtr_sen_stat_b = 1;
   }
 }
 
 void stop() {
 
   mtr_ctl_a(0,0); // set motors to zero
+  mtr_sen_stat_a = 0;
   mtr_ctl_b(0,0);
+   mtr_sen_stat_b = 0;
 
    // Brakes //
    // Full stop Cap't. Work on migrating this to a decellerate funct in future.
