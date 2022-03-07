@@ -1,6 +1,12 @@
 /* -------------------------------------- */
 /* 
 Bum Biter Bot MK 2.0
+*   06 Mar 2022 RM - Add ability Turn PID on and off with controler Select and Start for now.
+                      - Begin setup BlueTooth Terminal mobile for feedback with pid tuning etc.
+
+*   05 Mar 2022 RM - Added clip limiting function and installed PID libaray.
+                    - working on PID implementation
+
 *   04 Mar 2022 RM - Motor function changes
                       -> the 3 functions with control of the motor set the global variables for rotation. 
                    -Fixed up the motor debug info output.
@@ -72,7 +78,7 @@ Bum Biter Bot MK 2.0
 #define BAUDRATE 57600
 #define PRINTF Serial.println
 #define SPRINTF sprintf
-#include <stdio.h> 
+#include <stdio.h> // LMX
 #include <task.h> // LMX
 #include <log.h> // LMX
 #include <sysclock.h> // LMX
@@ -80,9 +86,13 @@ Bum Biter Bot MK 2.0
 // Sensors
 #include <SharpIR.h> // IR Distance Sensors
 
-// BlueTooth
+#include <PID_v1.h> // PID https://playground.arduino.cc/Code/PIDLibrary/
+
+// BlueTooth Config
 #define CUSTOM_SETTINGS
 #define INCLUDE_GAMEPAD_MODULE
+#define INCLUDE_TERMINAL_MODULE
+
 /*
    Gamepad module provides three different mode namely Digital, JoyStick and Accerleometer. 
    You can reduce the size of library compiled by enabling only those modules that you want to
@@ -189,6 +199,8 @@ scope_type_name
 
 int bot_init_runlvl  = 5; // Default init level.
 char bot_sys_debug[] = ""; // string to hold debug output.
+String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
+bool dataflag = 0;
 
 /********** MOTOR GLOBALS **********/
 
@@ -207,17 +219,38 @@ int mtr_sen_pos_b = 0; // SAFE readable versions of above motor postional counts
 double mtr_sen_rpm_a = 0.00; // Holds Rough RPM calc per motor
 double mtr_sen_rpm_b = 0.00; // Holds Rough RPM calc per motor
 
-double mtr_sen_speed_a =  0.00; // Meters per minute MPM
-double mtr_sen_speed_b =  0.00; // Meters per minute MPM
+double mtr_sen_speed_a =  0.00; // Estimated Ideal Speed. Wheel Circumference * RPM expressed in Meters per minute MPM
+double mtr_sen_speed_b =  0.00; // Estimated Ideal Speed. Wheel Circumference * RPM expressed in Meters per minute MPM
+
+int mtr_sen_clicks_per_sec_a = 0, mtr_sen_clicks_per_sec_b =0;
 
 int mtr_sen_stat_a = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
 int mtr_sen_stat_b = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
+
+
+// Motor Command PID Control
+bool bot_ctl_Motor_PID_Enable = 0;
+
+double bot_ctl_velocity, bot_ctl_rotation;  // PID motor control vars
+double mtr_cmd_a_Input, mtr_cmd_a_Output, mtr_cmd_a_Setpoint;
+double mtr_cmd_b_Input, mtr_cmd_b_Output, mtr_cmd_b_Setpoint;
+
+double aKp=100, aKi=50, aKd=5;
+double bKp=100, bKi=50, bKd=5;
+
+PID mtr_cmd_a_PID(&mtr_cmd_a_Input, &mtr_cmd_a_Output, &mtr_cmd_a_Setpoint,aKp,aKi,aKd,P_ON_M, DIRECT); // Motor A PID Object
+    // mtr_cmd_a_PID.SetSampleTime(100); // match sample time for RPM
+
+PID mtr_cmd_b_PID(&mtr_cmd_b_Input, &mtr_cmd_b_Output, &mtr_cmd_b_Setpoint,bKp,bKi,bKd,P_ON_M, DIRECT); // Motor B PID Object
+    //mtr_cmd_b_PID.SetSampleTime(100); // 10Hz sample time to match RPM calc.
+
 
 
 /********** SENSOR GLOBALS **********/
 int bot_sen_sonar_fwd_ping = 1; // Distance reported from fwd Ultra-Sonic Sensor rounded up to whole CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
 int bot_sen_sonar_rear_ping = 1; // Distance reported from rear Ultra-Sonic Sensor rounded up CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
 int bot_sen_sonar_ping_cnt = 5; // how many pings to sample for avg 
+
 
 int bot_sen_ir_right_ping = 0 ; // Distance reported from Right Analog IR 
 int bot_sen_ir_left_ping = 0 ; // Distance reported from Left Analog IR 
@@ -239,6 +272,15 @@ int bot_ctl_sonar_ping_lowval = 45; // turn until at least this much fwd space o
 bool randomBool() {
    return rand() > (RAND_MAX / 2);
 }
+// BlueTooth Terminal Output
+void bot_sys_bt_conlog(String inString = ""){
+  Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
+  if(inString.length() > 0 ){  
+    Terminal.println(inString);
+    }
+}
+
+
 
 /* ------------ <dpa> -------------------------- */
 /* Count idle cycles per second dpa original function */ 
@@ -267,23 +309,26 @@ void console_log(ASIZE delay)
   while (1) {
 
     if(DEBUG){
-    PRINTF ("======================== STATUS: ONLINE  ========================"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
-    debug_msg =  ("FWD SONAR :\t") + String (bot_sen_sonar_fwd_ping) + "\t";    
+    debug_msg = "";
+    debug_msg += ("======================== STATUS: ONLINE  ========================\n"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
+    debug_msg +=  ("FWD SONAR :\t") + String (bot_sen_sonar_fwd_ping) + "\t";    
     debug_msg +=  ("REAR SONAR:\t") + String (bot_sen_sonar_rear_ping) +"\n" ; 
     debug_msg +=  ("RIGHT IR:\t") + String (bot_sen_ir_right_ping) +"\t";
-    debug_msg +=  ("LEFT IR:\t") + String (bot_sen_ir_left_ping) +"\t";
-
-    PRINTF(debug_msg);   
-
-    PRINTF("\n==== MOTORS ====\n#MOTOR\t\tRPM\t\tSPD\t\tROT\t\tCNT");
-    debug_msg =  "Motor A\t\t" + String(mtr_sen_rpm_a) + "\t\t" + String (mtr_sen_speed_a) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a); 
-    PRINTF(debug_msg);
-
-    debug_msg =  "Motor B\t\t" + String(mtr_sen_rpm_b) + "\t\t" + String (mtr_sen_speed_b) + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b); 
-    PRINTF(debug_msg);
+    debug_msg +=  ("LEFT IR:\t") + String (bot_sen_ir_left_ping) +"\t\n";
     
-      
-
+    debug_msg += ("\n==== MOTORS ====\n#MOTOR\t\tCPS\t\tROT\t\tCNT\n");
+    
+    debug_msg +=  "Motor A\t\t" + String( mtr_sen_clicks_per_sec_a) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
+    debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_sec_b) + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
+    
+    //debug_msg +=  "Motor A\t\t" + String(mtr_sen_rpm_a) + "\t\t" + String (mtr_sen_speed_a) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
+    //debug_msg +=  "Motor B\t\t" + String(mtr_sen_rpm_b) + "\t\t" + String (mtr_sen_speed_b) + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
+    
+    PRINTF(debug_msg);
+    //bot_sys_bt_conlog("Motor A\nRPM:" + String(mtr_sen_rpm_a) + "\nSPD: " + String (mtr_sen_speed_a) + "\nROT: " + String( mtr_sen_stat_a) +"\nPOS: " + String(mtr_sen_pos_a)+"\n");
+    //bot_sys_bt_conlog("Motor B\nRPM:" + String(mtr_sen_rpm_b) + "\nSPD: " + String (mtr_sen_speed_b) + "\nROT: " + String( mtr_sen_stat_b) +"\nPOS: " + String(mtr_sen_pos_b)+"\n");
+    
+     
 
 /*    
     PRINTF("IR Right:\t");
@@ -353,6 +398,12 @@ void stats_task(ASIZE delay) /*  <dpa>  */
     }
 }
 
+float clip(float value, float min, float max ){ // dpa inspired cliping function
+  if (value > max ) return max;
+  if (value < min ) return min;
+  return value;
+}
+
 /* 
 -----------------------------------------  INIT Section ------------------------------------------
  TBD - Emulate a sysV type init function system. 
@@ -397,46 +448,25 @@ void init_2_IR_setup(){
 void bot_mtr_a_readEncoder(){  // run on INT and increment or decrement the wheel counter. Each wheel is as independant as possible.
   // Read encoder B when encoder A rises
   int mtra_encb = digitalRead(MTRA_ENCB);
-  int increment = 0;
   if(mtra_encb>0){
-    increment++;
     mtr_cal_pos_a++; // these globals are volatile. They are read in an ATOMIC_BLOCK    
   }
   else {
-    increment--;
     mtr_cal_pos_a--; // these globals are volatile. They are read in an ATOMIC_BLOCK 
 
   }
 
-   /*
-      // Compute velocity with method 2
-      long currT = micros();
-      float deltaT = ((float) (currT - mtr_cal_prevT_a ))/1.0e6;
-      mtr_cal_vel_a  = increment/deltaT;
-      mtr_cal_prevT_a = currT;
-    */
-
 }
 
-void bot_mtr_b_readEncoder(){
-  int increment = 0;
+void bot_mtr_b_readEncoder(){ // run on INT and increment or decrement the wheel counter. Each wheel is as independant as possible.
+  // Read encoder B when encoder A rises
   int mtrb_encb = digitalRead(MTRB_ENCB);
-  if(mtrb_encb>0){
-    increment++;
+  if(mtrb_encb>0){  
     mtr_cal_pos_b++;// these globals are volatile. They are read in an ATOMIC_BLOCK 
   }
   else {
-    increment--;
     mtr_cal_pos_b--; // these globals are volatile. They are read in an ATOMIC_BLOCK 
-
   }
-/*
-    // Compute velocity with method 2
-  long currT = micros();
-  float deltaT = ((float) (currT - mtr_cal_prevT_b ))/1.0e6;
-  mtr_cal_vel_b  = increment/deltaT;
-  mtr_cal_prevT_b = currT;
-  */
 }
 
 void init_3_motors_setup() {
@@ -456,7 +486,11 @@ void init_3_motors_setup() {
   pinMode(MTRB_ENCB, INPUT);
   
   attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), bot_mtr_a_readEncoder, RISING); // set interupts
-  attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), bot_mtr_b_readEncoder, RISING); // set interups
+  attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), bot_mtr_b_readEncoder, RISING); // set interups 
+  
+  // Enable Motor CMD PID
+  mtr_cmd_b_PID.SetMode(AUTOMATIC);
+  mtr_cmd_a_PID.SetMode(AUTOMATIC);
 
   if (DEBUG){PRINTF("<INIT>\tinit_3_motors_setup"); } 
   
@@ -467,7 +501,7 @@ void init_3_motors_setup() {
 
 void mtr_ctl_a(bool rev = false, int speed = 0 ) {
   MOTOR_WAKE;
-  if (rev)
+  if (rev )
   {
     // reverse
       digitalWrite(MOTOR_AIN1, LOW);
@@ -499,15 +533,92 @@ void mtr_ctl_b(bool rev = false, int speed = 0 ) {
   }
 }
 
+void mtr_cmd_a(int speed){
+  MOTOR_WAKE;
+  if (speed == 0){
+    analogWrite(MOTOR_PWMA, speed);
+    digitalWrite(MOTOR_AIN1, LOW);
+    digitalWrite(MOTOR_AIN2, LOW);
+    return;
+  }
+
+  if (speed < 0 )
+  {
+    // reverse
+      digitalWrite(MOTOR_AIN1, LOW);
+      digitalWrite(MOTOR_AIN2, HIGH);
+      analogWrite(MOTOR_PWMA, speed);
+      mtr_sen_stat_a = -1;
+  } else 
+  { // FWD mtr A
+      digitalWrite(MOTOR_AIN1, HIGH);
+      digitalWrite(MOTOR_AIN2, LOW);
+      analogWrite(MOTOR_PWMA, speed);
+      mtr_sen_stat_a = 1;
+  }
+
+}
+
+void mtr_cmd_b(int speed){
+  MOTOR_WAKE;
+    if (speed == 0){
+    analogWrite(MOTOR_PWMB, speed);
+    digitalWrite(MOTOR_BIN1, LOW);
+    digitalWrite(MOTOR_BIN2, LOW);
+    return;
+  }
+
+  if (speed < 0)
+  {
+    // reverse
+      digitalWrite(MOTOR_BIN1, LOW);
+      digitalWrite(MOTOR_BIN2, HIGH);
+      analogWrite(MOTOR_PWMB, speed);
+      mtr_sen_stat_b = -1;
+  } else{ // FWD mtr B
+      digitalWrite(MOTOR_BIN1, HIGH);
+      digitalWrite(MOTOR_BIN2, LOW);
+      analogWrite(MOTOR_PWMB, speed);
+      mtr_sen_stat_b = 1;
+  }
+
+}
+void bot_motor_command(){
+    // Calc right and left motor inputs based on global  Velocity and rotation factors
+    int left_mtr = bot_ctl_velocity + bot_ctl_rotation; 
+    int right_mtr = bot_ctl_velocity - bot_ctl_rotation;
+    
+    mtr_cmd_a_Input = map(mtr_sen_rpm_a,1,150,1,100); // map RPM as a percentage 0-150RPM = 0-100% 
+    mtr_cmd_b_Input = map(mtr_sen_rpm_b,1,150,1,100); // map RPM as a percentage 0-150RPM = 0-100% 
+
+    mtr_cmd_b_Setpoint = clip(left_mtr,-100,100);
+    mtr_cmd_a_Setpoint = clip(right_mtr,-100,100);
+    
+    // compute each motor PID 
+    mtr_cmd_a_PID.Compute();
+    mtr_cmd_b_PID.Compute();
+      
+    mtr_cmd_a( (right_mtr/abs(right_mtr) * mtr_cmd_a_Output)); // send +/-  mtr_cmd_a_Output for rotation
+    mtr_cmd_b( (left_mtr/abs(left_mtr) * mtr_cmd_b_Output));  
+
+}
+
 void stop() {
+  //Aye Capt! FULL STOP!
+  // Brakes //
+   // Work on migrating this to a decellerate funct in future.
+
+  bot_ctl_velocity = 0; // Set global bot velocity factor to 0.
+  bot_ctl_rotation = 0; ;// Set global rotation factor to FALSE
+  mtr_cmd_a(0);
+  mtr_cmd_b(0);
 
   mtr_ctl_a(0,0); // set motors to zero
   mtr_sen_stat_a = 0;
+
   mtr_ctl_b(0,0);
    mtr_sen_stat_b = 0;
 
-   // Brakes //
-   // Full stop Cap't. Work on migrating this to a decellerate funct in future.
    digitalWrite(MOTOR_AIN1, HIGH);
    digitalWrite(MOTOR_AIN2, HIGH);
    analogWrite(MOTOR_PWMA,0);
@@ -516,53 +627,6 @@ void stop() {
    digitalWrite(MOTOR_BIN2, HIGH);
    analogWrite(MOTOR_PWMB,0);  
    //WAIT(1);
-}
-
-void motor_test_a (ASIZE delay) // run motor  fwd and backward 
-{
-   MOTOR_WAKE;
-   int speed = 150;
-
-   while (1)
-   {
-   digitalWrite(MOTOR_AIN1, HIGH);
-   digitalWrite(MOTOR_AIN2, LOW);
-   analogWrite(MOTOR_PWMA, speed);
-   WAIT(delay);
-   stop();
-   WAIT(delay);
-   digitalWrite(MOTOR_AIN1, LOW);
-   digitalWrite(MOTOR_AIN2, HIGH);
-   analogWrite(MOTOR_PWMA, speed);
-   WAIT(delay);
-   stop();
-   WAIT(5000);   
-   }
-
-}
-
-void motor_test_b (ASIZE delay)// run motor  fwd and backward 
-{
-   MOTOR_WAKE;
-   
-   int speed = 150;
-
-   while (1)
-   {
-   digitalWrite(MOTOR_BIN1, HIGH);
-   digitalWrite(MOTOR_BIN2, LOW);
-   analogWrite(MOTOR_PWMB, speed);
-   WAIT(delay);
-   stop();
-   WAIT(delay);
-   digitalWrite(MOTOR_BIN1, LOW);
-   digitalWrite(MOTOR_BIN2, HIGH);
-   analogWrite(MOTOR_PWMB, speed);
-   WAIT(delay);
-   stop();
-   WAIT(5000);   
-   }
-
 }
 
 void bot_ctl_forward(int speed){
@@ -691,12 +755,13 @@ void ir_ping(){
   WAIT(1);
 }
 
+
 void svc_ping( ASIZE delay){ // PING service function.
     
   while (1)
   {
     bot_sen_sonar_fwd_ping = sonar_ping(0);
-    WAIT(1); // stager sonar pings by 1 ms
+    WAIT(1); // stagger sonar pings by 1 ms
     bot_sen_sonar_rear_ping = sonar_ping(1);
     ir_ping(); // Analog IR side sensors update global vars
 
@@ -704,50 +769,56 @@ void svc_ping( ASIZE delay){ // PING service function.
   }  
 }
 
-void svc_encoders(ASIZE ignored){ // Wheel encoder update function
+void svc_encoders(ASIZE ignored){ // 10Hz Wheel encoder update function
+     unsigned long x;
+     int interval = 1000;
+     x = sysclock;
+     int posPrev_a, posPrev_b, deltaA, deltaB;
+     posPrev_a = mtr_sen_pos_a;
+     posPrev_b = mtr_sen_pos_b;
+     
     while(1){
-     int posPrev_a = mtr_sen_pos_a;
-     int posPrev_b = mtr_sen_pos_b;
-     float mtr_a_roations = 0;
-     float mtr_b_roations = 0;
-
-      // This ATOMIC_BLOCK reads the encoders and calculates the RPM for each motor during the interrupts then moves the data to globals that we can use. 
+     // This ATOMIC_BLOCK reads the encoders and calculates the RPM for each motor during the interrupts then moves the data to globals that we can use. 
       ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
         mtr_sen_pos_a = mtr_cal_pos_a; 
         mtr_sen_pos_b = mtr_cal_pos_b; 
-      
-        // mtr_sen_vel_a = mtr_cal_vel_a;
-        // mtr_sen_vel_b = mtr_cal_vel_b;
-      mtr_a_roations =  (abs( mtr_sen_pos_a - posPrev_a   )  * 600) / MTRA_CLICKS_PER ; // 600 (60sec * 10 times per sec for RPM) | encoder clicks per wheel rotation
-      mtr_b_roations =  (abs( mtr_sen_pos_b - posPrev_b )  * 600) / MTRB_CLICKS_PER ; // 240 (60sec * 10 times per sec for RPM) | encoder clicks per wheel rotation
-      mtr_sen_rpm_a = mtr_a_roations;
-      mtr_sen_rpm_b = mtr_b_roations;
-
-      mtr_sen_speed_a = mtr_a_roations * ( (MTRA_WHEELD * PI) / 1000 ); 
-      mtr_sen_speed_b = mtr_b_roations * ( (MTRB_WHEELD * PI) / 1000 );
-    
+        
       }
-
-      WAIT(100); // Samples encoder counts 10 times per sec. much faster than 100ms loop seems to give erratic results. Not enough clicks for good math.
-      
+      if (sysclock >= (x + interval) ){ // if we have passed interval time (1000ms)
+          
+        // calc delta pos
+            deltaA = abs(abs(mtr_sen_pos_a) - abs(posPrev_a));
+            if(deltaA){
+              mtr_sen_clicks_per_sec_a = deltaA;
+              } else{
+                mtr_sen_clicks_per_sec_a = 0;
+              }
+            deltaB = abs(abs(mtr_sen_pos_b) - abs(posPrev_b));
+            if (deltaB)  {  
+              mtr_sen_clicks_per_sec_b = deltaB;    
+              } else{
+                mtr_sen_clicks_per_sec_b = 0;
+              }
+          // reset for next run
+        x = sysclock;
+        posPrev_a = mtr_sen_pos_a;
+        posPrev_b = mtr_sen_pos_b;  
+        }
 
     
-
-  }
- 
+      WAIT(1);
+      }
+  
 }
 
-void bot_cruise ( ASIZE delay){ // Cruise Behavior
+
+void bot_motor_cmd_svc ( ASIZE delay){ // Motor Command Service Function
   while (1)
   {
-    /*
-    <<< Wake >>>
-    If(Need){
-      Seek
-      Do-Until
-
-    <<< THE END >>>
-    */
+    if (bot_ctl_Motor_PID_Enable)
+    {
+    bot_motor_command();  
+    }  
 
    WAIT(1);
  
@@ -759,6 +830,30 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
   while (1)
   {
     Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
+
+    /* BEGIN BlueTooth Terminal Code *** TBD ** Move to seperate function */
+    while (Serial.available() != 0)
+  {
+    Serialdata = String(Serialdata + char(Serial.read()));
+    dataflag = 1;
+  }
+    
+  if (dataflag == 1)
+  {
+    Terminal.print(Serialdata);
+    Serialdata = "";
+    dataflag = 0;
+  }
+ if(Terminal.available())
+  {
+    while (Terminal.available() != 0)
+    {
+      Serial.write(Terminal.read());
+    }
+    Serial.println();
+  }
+
+    /* BEGIN Game Pad Code. *** TBD ** Move to seperate function */
     // cmd aliases for clarity
     bool up = GamePad.isUpPressed();
     bool down = GamePad.isDownPressed();
@@ -770,12 +865,14 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
     bool cross = GamePad.isCrossPressed();
 
   if (GamePad.isStartPressed()){
-    // make a selction.
+    bot_ctl_Motor_PID_Enable = true;
     WAIT(20);
-    continue; 
+    continue;
+    
   }
-  if (GamePad.isStartPressed()){
+  if (GamePad.isSelectPressed()){
     // make a selction.
+    bot_ctl_Motor_PID_Enable = false;
     WAIT(20);
     continue;
   }
@@ -783,13 +880,21 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
   if ( up or down or left or right or circle or square or triangle or cross){ // a movement key was pressed 
 
     if( up)  {
-      bot_ctl_forward(mtr_ctl_speed);
+      if(bot_ctl_Motor_PID_Enable){ 
+        bot_ctl_velocity = 75;
+        } else {
+          bot_ctl_forward(mtr_ctl_speed);
+        }
+      
       WAIT(delay);
     } 
 
     if (down)   {
-      bot_ctl_backward(mtr_ctl_speed);
-      WAIT(delay);
+      if(bot_ctl_Motor_PID_Enable){ 
+        bot_ctl_velocity = -75;
+        } else {
+          bot_ctl_backward (mtr_ctl_speed);
+        }
     } 
 
     if (left)
@@ -920,7 +1025,7 @@ void setup()
     
     // LMX Tasks
     create_task((char *)"IDLE",cpu_idle,0,MINSTACK);
-    create_task((char *)"STATS",stats_task,10000,MINSTACK*4);
+    create_task((char *)"STATS",stats_task,20000,MINSTACK*4);
     create_task((char *)"SIGNON",signon,1,MINSTACK*4);
     
     // Level 1 System Tasks
@@ -929,11 +1034,14 @@ void setup()
     create_task((char *)"CONLOG",console_log,2000,MINSTACK*2); // logging to serial output
 
     // Level 2 Services     
-    create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service.  250ms. Delay is ignored.
+    create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored. Encoders sample 10Hz every 100ms. 
     create_task((char *)"PING",svc_ping,10, MINSTACK); // IR and Sonar Ping service
+    create_task((char *)"MTRCMD",bot_motor_cmd_svc,1, MINSTACK); // Bot Motor Command service
 
     // Level 3 Controls
-    create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth User Input Contorler
+    create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth User Input Controler
+
+    
 
     scheduler(); // Main LMX task scheduler
     PRINTF("Should never get here."); // Leave this alone.
