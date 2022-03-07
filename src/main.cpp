@@ -770,9 +770,8 @@ void svc_ping( ASIZE delay){ // PING service function.
 }
 
 void svc_encoders(ASIZE ignored){ // 10Hz Wheel encoder update function
-     unsigned long x;
+     unsigned long x = sysclock;
      int interval = 1000;
-     x = sysclock;
      int posPrev_a, posPrev_b, deltaA, deltaB;
      posPrev_a = mtr_sen_pos_a;
      posPrev_b = mtr_sen_pos_b;
@@ -784,8 +783,7 @@ void svc_encoders(ASIZE ignored){ // 10Hz Wheel encoder update function
         mtr_sen_pos_b = mtr_cal_pos_b; 
         
       }
-      if (sysclock >= (x + interval) ){ // if we have passed interval time (1000ms)
-          
+      if (sysclock >= (x + interval) ){ // if we have passed interval time (1000ms)          
         // calc delta pos
             deltaA = abs(abs(mtr_sen_pos_a) - abs(posPrev_a));
             if(deltaA){
@@ -800,12 +798,12 @@ void svc_encoders(ASIZE ignored){ // 10Hz Wheel encoder update function
                 mtr_sen_clicks_per_sec_b = 0;
               }
           // reset for next run
-        x = sysclock;
+        
         posPrev_a = mtr_sen_pos_a;
         posPrev_b = mtr_sen_pos_b;  
+        x = sysclock;
         }
 
-    
       WAIT(1);
       }
   
