@@ -1,6 +1,14 @@
 /* -------------------------------------- */
 /* 
 Bum Biter Bot MK 2.0
+*   15 Mar 2022 RM - Implemented new encoder counter functions to increse the resoultion of the counts. I'm getting 4 times more! 8D
+                      |-> Made new backup before began. 
+                      |-> https://github.com/vinay-lanka/navbot_hardware/blob/master/encodertest/encodertest.ino
+                   - 
+
+*   13 Mar 2022 RM - Continued Troubleshooting of new shield. Success. 
+*   11 Mar 2022 RM - changing PINS to accomodate for new board shield configuration 
+
 *   06 Mar 2022 RM - Add ability Turn PID on and off with controler Select and Start for now.
                       - Begin setup BlueTooth Terminal mobile for feedback with pid tuning etc.
 
@@ -11,10 +19,9 @@ Bum Biter Bot MK 2.0
                       -> the 3 functions with control of the motor set the global variables for rotation. 
                    -Fixed up the motor debug info output.
                    
-
  *  03 Mar 2022 RM - Moved wheel encoder reading to a service used an atomic_block for less erratic results from reading the interrupt driven variables.
                       - Working on PID control.
-                        - Got RPM conunt working. It could probably be better.
+                        - Got RPM count working. It could probably be better.
                         - Added distance and speed calc using wheel measurments                        
 
  *  02 Mar 2022 RM - Added wheel encoder counters and related functions.
@@ -51,13 +58,14 @@ Bum Biter Bot MK 2.0
  *          
  * 
  *  TO-DO List: 
- *            - Add ability to send some console DEBUG log info back over serial BT console.
+ *            - Add/fix ability to send some console DEBUG log info back over serial BT console.
  *            - Add visual feedback RGB LEDs
  *            - Add Speaker. 
  *            - Add IMU
  *            - BUG. When Arduino reboots BT connection is problematic.
  *              |-> Connect the appropriate reset ping to the BT module and have it restart when the sketch does.
  *                |-->Make sure above is run time configurable option ALSO a tirggerable event.
+ *            - BUG. Time out required for HC-SRO4. Default of 1000ms causes issues if conection faults.  
  * 
  *            - Too long for now.
  *         
@@ -92,6 +100,7 @@ Bum Biter Bot MK 2.0
 #define CUSTOM_SETTINGS
 #define INCLUDE_GAMEPAD_MODULE
 #define INCLUDE_TERMINAL_MODULE
+#define INCLUDE_PINMONITOR_MODULE
 
 /*
    Gamepad module provides three different mode namely Digital, JoyStick and Accerleometer. 
@@ -128,27 +137,28 @@ void printkbuf(char *s) {  // dpa
       BRAKE = HIGH/HIGH
 */ 
 // motor A
-#define MTRA_ENCA 2 // Motor A encoder output A must be on interrupt pin.
-#define MTRA_ENCB 3 // Motor A encoder output on B on an interrupt pin.
-#define MTRA_CLICKS_PER 132 // encoder clicks per bot wheel rotation.
+#define MTRA_ENCA 2 // orange Motor A encoder output A must be on interrupt pin.
+#define MTRA_ENCB 3 // red Motor A encoder output on B on an interrupt pin.
+#define MTRA_CLICKS_PER 540 // encoder clicks per bot wheel rotation.
 #define MTRA_WHEELD 60.3 // wheel D in mm
 
 
 // motor B
-#define MTRB_ENCA 19 // Motor B encoder output A must be on interrupt pin. // remember the motors are flipped
-#define MTRB_ENCB 18 // Motor B encoder output B must be on interrupt pin.
-#define MTRB_CLICKS_PER  132 // encoder clicks per bot wheel rotation.
+#define MTRB_ENCA 19 // red. Motor B encoder output A must be on interrupt pin. // remember the motors are flipped here and in polarity. Affected encoder counting rotation.
+#define MTRB_ENCB 18 // orange.  Motor B encoder output B must be on interrupt pin. // remember the motors are flipped here and in polarity.
+#define MTRB_CLICKS_PER  540// encoder clicks per bot wheel rotation.
 #define MTRB_WHEELD 60.3 // wheel D in mm
 
-// These Interface with Motor Driver. TB6612fng H-Bridge
+// These Interface with Motor Driver H-Bridge.
 // keep in mind the PWM defines must be on PWM pins
-#define MOTOR_BIN2 34
-#define MOTOR_BIN1 36
-#define MOTOR_STBY 38
-#define MOTOR_AIN1 40                                       
-#define MOTOR_AIN2 42
-#define MOTOR_PWMB 44 // PWM pin
-#define MOTOR_PWMA 46 // PWM Pin 
+              // new pin#    // Old pin#
+#define MOTOR_BIN2 6  // 34
+#define MOTOR_BIN1 7  // 36
+#define MOTOR_STBY 8  // 38
+#define MOTOR_AIN1 9  // 40                                       
+#define MOTOR_AIN2 10 // 42
+#define MOTOR_PWMB 5  // 44 // PWM pin
+#define MOTOR_PWMA 11 // 46 // PWM Pin 
 
 
 // sound control
@@ -157,20 +167,21 @@ void printkbuf(char *s) {  // dpa
 // SENSONR PINS 
   //  HC-SR04 Ultra-sonic Distance Sensors
       // FWD 
-#define trigPinFwd 32 // blue
-#define echoPinFwd 30 // green
+#define trigPinFwd 46// yellow 
+#define echoPinFwd 48 // green. Note that 46 is also PWM capable. 
     // REAR
-#define trigPinRear 26
-#define echoPinRear 28
+#define trigPinRear 26 // yellow
+#define echoPinRear 28 // green
 
   // Sharp Analog IR sensor 4-30CM  gp2y0a41sk0f 
-#define IRPin_1  PIN_A0
-#define IRPin_2  PIN_A1
+#define IRPin_1  PIN_A0 // right
+#define IRPin_2  PIN_A1 // left
 #define IR_SENSOR_1 GP2Y0A41SK0F // Model of Sharp IR distance sensor for FWD IR
 #define IR_SENSOR_2 GP2Y0A41SK0F // Model of Sharp IR distance sensor for FWD IR
-  // Sharp Digital IR distance Sensors 2YD021
-#define IRPin_FWD 4 
-#define IRPin_Rear 5
+  
+// Sharp Digital IR distance Sensors 2YD021 - Disabled Mar 12 2022 RM.
+// #define IRPin_FWD 4 
+// #define IRPin_Rear 5
 
 /* Layer 1 function alias definitions    */
 //  heartbeat LED .
@@ -213,6 +224,10 @@ int mtr_ctl_speed_b = 0;  // set motor b speed
 // Motor Virtual Sensors
 volatile int mtr_cal_pos_a = 0; // motor A positional counts +/- // volatiles are read in an ATOMIC_BLOCK
 volatile int mtr_cal_pos_b = 0; // motor B positional counts +/- volatiles are read in an ATOMIC_BLOCK
+
+volatile long mtr_cal_a_encoder0Pos = 0;    // MTR A encoder 
+volatile long mtr_cal_b_encoder1Pos = 0;    // MTR B encoder 
+
 int mtr_sen_pos_a = 0; // SAFE readable versions of above motor postional counts.
 int mtr_sen_pos_b = 0; // SAFE readable versions of above motor postional counts.
 
@@ -222,7 +237,7 @@ double mtr_sen_rpm_b = 0.00; // Holds Rough RPM calc per motor
 double mtr_sen_speed_a =  0.00; // Estimated Ideal Speed. Wheel Circumference * RPM expressed in Meters per minute MPM
 double mtr_sen_speed_b =  0.00; // Estimated Ideal Speed. Wheel Circumference * RPM expressed in Meters per minute MPM
 
-int mtr_sen_clicks_per_sec_a = 0, mtr_sen_clicks_per_sec_b =0;
+int mtr_sen_clicks_per_a = 0, mtr_sen_clicks_per_b =0;
 
 int mtr_sen_stat_a = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
 int mtr_sen_stat_b = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
@@ -235,13 +250,12 @@ double bot_ctl_velocity, bot_ctl_rotation;  // PID motor control vars
 double mtr_cmd_a_Input, mtr_cmd_a_Output, mtr_cmd_a_Setpoint;
 double mtr_cmd_b_Input, mtr_cmd_b_Output, mtr_cmd_b_Setpoint;
 
-double aKp=100, aKi=50, aKd=5;
-double bKp=100, bKi=50, bKd=5;
+double aKp=0.35, aKi=10, aKd= 0.1;
+double bKp=0.35, bKi=10, bKd= 0.1;
 
-PID mtr_cmd_a_PID(&mtr_cmd_a_Input, &mtr_cmd_a_Output, &mtr_cmd_a_Setpoint,aKp,aKi,aKd,P_ON_M, DIRECT); // Motor A PID Object
+ PID mtr_cmd_a_PID(&mtr_cmd_a_Input, &mtr_cmd_a_Output, &mtr_cmd_a_Setpoint,aKp,aKi,aKd,P_ON_M, DIRECT); // Motor A PID Object
     // mtr_cmd_a_PID.SetSampleTime(100); // match sample time for RPM
-
-PID mtr_cmd_b_PID(&mtr_cmd_b_Input, &mtr_cmd_b_Output, &mtr_cmd_b_Setpoint,bKp,bKi,bKd,P_ON_M, DIRECT); // Motor B PID Object
+ PID mtr_cmd_b_PID(&mtr_cmd_b_Input, &mtr_cmd_b_Output, &mtr_cmd_b_Setpoint,bKp,bKi,bKd,P_ON_M, DIRECT); // Motor B PID Object
     //mtr_cmd_b_PID.SetSampleTime(100); // 10Hz sample time to match RPM calc.
 
 
@@ -309,6 +323,8 @@ void console_log(ASIZE delay)
   while (1) {
 
     if(DEBUG){
+    // run BT update commands
+
     debug_msg = "";
     debug_msg += ("======================== STATUS: ONLINE  ========================\n"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
     debug_msg +=  ("FWD SONAR :\t") + String (bot_sen_sonar_fwd_ping) + "\t";    
@@ -318,8 +334,8 @@ void console_log(ASIZE delay)
     
     debug_msg += ("\n==== MOTORS ====\n#MOTOR\t\tCPS\t\tROT\t\tCNT\n");
     
-    debug_msg +=  "Motor A\t\t" + String( mtr_sen_clicks_per_sec_a) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
-    debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_sec_b) + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
+    debug_msg +=  "Motor A\t\t" + String( mtr_sen_clicks_per_a * 4) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
+    debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_b * 4 )  + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
     
     //debug_msg +=  "Motor A\t\t" + String(mtr_sen_rpm_a) + "\t\t" + String (mtr_sen_speed_a) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
     //debug_msg +=  "Motor B\t\t" + String(mtr_sen_rpm_b) + "\t\t" + String (mtr_sen_speed_b) + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
@@ -355,9 +371,7 @@ int flash_sem;
 
 void led(ASIZE delay)
 {
-    int i;
-    unsigned long cnt;
-    
+    int i;   
     while (1) {
         semaphore_obtain(&flash_sem);
         for (i = 0; i < 2; i++) {
@@ -373,10 +387,13 @@ void led(ASIZE delay)
 
 void flash(ASIZE delay)
 {
-  unsigned long cnt;
+    TSIZE t;
+    t = sysclock + delay;
+
     while (1) {
+      // WAIT(delay);
+      PERIOD(&t,delay);
       semaphore_release(&flash_sem);
-      WAIT(delay);
     }
 }
 /* ----------------------------------------- */
@@ -439,12 +456,13 @@ void init_2_sonar_setup(){
 }
 
 void init_2_IR_setup(){
-  pinMode(IRPin_FWD, INPUT); //  the 2 digital IR sensors
-  pinMode(IRPin_Rear, INPUT);
+ // pinMode(IRPin_FWD, INPUT); //  the 2 digital IR sensors
+ // pinMode(IRPin_Rear, INPUT);
+ // Disabled mar12 2020 RM
 }
 
 /* LVL 3 INIT Functions */
-
+/*
 void bot_mtr_a_readEncoder(){  // run on INT and increment or decrement the wheel counter. Each wheel is as independant as possible.
   // Read encoder B when encoder A rises
   int mtra_encb = digitalRead(MTRA_ENCB);
@@ -468,6 +486,115 @@ void bot_mtr_b_readEncoder(){ // run on INT and increment or decrement the wheel
     mtr_cal_pos_b--; // these globals are volatile. They are read in an ATOMIC_BLOCK 
   }
 }
+*/
+
+// ************** encoder MTR A *********************
+void doEncoderA(){  
+
+  // look for a low-to-high on channel A
+  if (digitalRead( MTRA_ENCA) == HIGH) { 
+    // check channel B to see which way encoder is turning
+    if (digitalRead( MTRA_ENCB) == LOW) {  
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;         // CCW
+    } 
+    else {
+      
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;         // CW     
+    }
+  }
+  else   // must be a high-to-low edge on channel A                                       
+  { 
+    // check channel B to see which way encoder is turning  
+    if (digitalRead(MTRA_ENCB) == HIGH) {   
+      
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;          // CCW
+    } 
+    else {
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;          // CW
+    }
+  }
+ 
+}
+
+void doEncoderB(){  
+
+  // look for a low-to-high on channel B
+  if (digitalRead(MTRA_ENCB) == HIGH) {   
+   // check channel A to see which way encoder is turning
+    if (digitalRead(MTRA_ENCA) == HIGH) {  
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;         // CCW
+    } 
+    else {
+      
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;         // CW
+    }
+  }
+  // Look for a high-to-low on channel B
+  else { 
+    // check channel B to see which way encoder is turning  
+    if (digitalRead(MTRA_ENCA) == LOW) {   
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;          // CCW
+    } 
+    else {
+      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;          // CW
+      
+    }
+  }
+  
+}
+
+// ************** encoder MTR B *********************
+
+void doEncoderC(){  
+
+  // look for a low-to-high on channel A
+  if (digitalRead(MTRB_ENCA) == HIGH) { 
+    // check channel B to see which way encoder is turning
+    if (digitalRead(MTRB_ENCB) == LOW) {  
+       mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;         // CW
+    } 
+    else {
+      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;         // CCW
+    }
+  }
+  else   // must be a high-to-low edge on channel A                                       
+  { 
+    // check channel B to see which way encoder is turning  
+    if (digitalRead(MTRB_ENCB) == HIGH) {   
+      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;          // CW
+    } 
+    else {
+      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;          // CCW
+    }
+  }
+ 
+}
+
+void doEncoderD(){  
+
+  // look for a low-to-high on channel B
+  if (digitalRead(MTRB_ENCB) == HIGH) {   
+   // check channel A to see which way encoder is turning
+    if (digitalRead(MTRB_ENCA) == HIGH) {  
+      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;         // CW
+    } 
+    else {
+      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;         // CCW
+    }
+  }
+  // Look for a high-to-low on channel B
+  else { 
+    // check channel B to see which way encoder is turning  
+    if (digitalRead(MTRB_ENCA) == LOW) {   
+      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;          // CW
+    } 
+    else {
+      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;          // CCW
+    }
+  }
+  
+
+}
 
 void init_3_motors_setup() {
   // H-Bridge
@@ -485,9 +612,14 @@ void init_3_motors_setup() {
   pinMode(MTRB_ENCA, INPUT);  
   pinMode(MTRB_ENCB, INPUT);
   
-  attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), bot_mtr_a_readEncoder, RISING); // set interupts
-  attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), bot_mtr_b_readEncoder, RISING); // set interups 
-  
+  // attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), bot_mtr_a_readEncoder, RISING); // set interupts
+  // attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), bot_mtr_b_readEncoder, RISING); // set interups 
+  attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), doEncoderA, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(MTRA_ENCB ), doEncoderB, CHANGE); 
+
+  attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), doEncoderC, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(MTRB_ENCB), doEncoderD, CHANGE); 
+
   // Enable Motor CMD PID
   mtr_cmd_b_PID.SetMode(AUTOMATIC);
   mtr_cmd_a_PID.SetMode(AUTOMATIC);
@@ -497,7 +629,87 @@ void init_3_motors_setup() {
 }
 
 
+
+int sonar_ping(int num = 0 ){  // take a sample number of pings and return rounded avg in CM. Sum adds 1cm to reserve 0 as an error situation. since this is only used as bumper and not measuerment we dont care much atm.
+    float duration = 0, distance; 
+    int sum = 1, cnt = 0; 
+ 
+
+
+  while (cnt < bot_sen_sonar_ping_cnt)
+  { 
+    
+    if (num == 0){ //default ping fwd sonar
+   // Write 10 MicroSec pulse to trigger pin.
+        digitalWrite(trigPinFwd,LOW);// ensure set LOW to start. 
+        delayMicroseconds(2); 
+        digitalWrite(trigPinFwd,HIGH);
+        delayMicroseconds(10);
+        digitalWrite(trigPinFwd,LOW);  
+       // measure response    
+        duration = pulseIn(echoPinFwd,HIGH);
+
+    } else if (num == 1) // ping rear sonar
+    {
+         // Write 10 MicroSec pulse to trigger pin.
+        digitalWrite(trigPinRear,LOW);// ensure set LOW to start. 
+        delayMicroseconds(2); 
+        digitalWrite(trigPinRear,HIGH);
+        delayMicroseconds(10);
+        digitalWrite(trigPinRear,LOW);  
+       // measure response
+    duration = pulseIn(echoPinRear,HIGH);
+    }
+    
+
+    // calculate distance in CM
+    distance = (duration / 2) * 0.0343; // speed of sound at sea level 20C 343 m/s  adjust for cond?
+    // send results to serial montior
+    //Serial.print ("Distance = ");
+
+   if (distance >= 400 || distance <= 2 ){
+      // Serial.println("Out Of Range");
+      distance = 0;
+      // sum += round(distance);    
+      
+   } else {
+      // Serial.println(round(distance));
+      // Serial.print(" cm\n");
+      // WAIT(1000);
+      sum += round(distance); // add measurment
+      cnt++; // increment ping counter that is tested against global config var int bot_sen_ping_cnt
+   }
+    WAIT(1);  
+    
+
+  }
+  int avg =  sum / cnt;
+    //PRINTF(avg);
+    return avg;
+
+}
+
+void ir_ping(){
+  
+  bot_sen_ir_right_ping = IRsensorRight.getDistance();
+
+  bot_sen_ir_left_ping = IRsensorLeft.getDistance();
+  /*
+  if( digitalRead(IRPin_FWD)  == HIGH ){
+    bot_sen_ir_fwd_ping = true;
+  } else bot_sen_ir_fwd_ping = false;
+  // Rear IR disconnected pending replacement. Mar 1 2022 probably not required in final build anyway
+  if( digitalRead(IRPin_Rear)  == HIGH ){
+    bot_sen_ir_rear_ping = true;
+  } else bot_sen_ir_rear_ping = false;
+  */
+  //PRINTF("[DEBUG]: IR PING");
+  WAIT(1);
+
+}
+
 /* Level 5 Control Functions */
+
 
 void mtr_ctl_a(bool rev = false, int speed = 0 ) {
   MOTOR_WAKE;
@@ -539,6 +751,7 @@ void mtr_cmd_a(int speed){
     analogWrite(MOTOR_PWMA, speed);
     digitalWrite(MOTOR_AIN1, LOW);
     digitalWrite(MOTOR_AIN2, LOW);
+    mtr_sen_stat_a = 0;
     return;
   }
 
@@ -565,6 +778,7 @@ void mtr_cmd_b(int speed){
     analogWrite(MOTOR_PWMB, speed);
     digitalWrite(MOTOR_BIN1, LOW);
     digitalWrite(MOTOR_BIN2, LOW);
+    mtr_sen_stat_b = 0;
     return;
   }
 
@@ -588,8 +802,8 @@ void bot_motor_command(){
     int left_mtr = bot_ctl_velocity + bot_ctl_rotation; 
     int right_mtr = bot_ctl_velocity - bot_ctl_rotation;
     
-    mtr_cmd_a_Input = map(mtr_sen_rpm_a,1,150,1,100); // map RPM as a percentage 0-150RPM = 0-100% 
-    mtr_cmd_b_Input = map(mtr_sen_rpm_b,1,150,1,100); // map RPM as a percentage 0-150RPM = 0-100% 
+    mtr_cmd_a_Input = map((mtr_sen_clicks_per_a * mtr_sen_stat_a) ,1,90,1,100); // map clicks per 250msec as percentage 330 cps = MAX  = 100  
+    mtr_cmd_b_Input = map((mtr_sen_clicks_per_b * mtr_sen_stat_b ),1,90,1,100); // map clicks per 250msec as percentage 330 cps = MAX  = 100  
 
     mtr_cmd_b_Setpoint = clip(left_mtr,-100,100);
     mtr_cmd_a_Setpoint = clip(right_mtr,-100,100);
@@ -599,37 +813,58 @@ void bot_motor_command(){
     mtr_cmd_b_PID.Compute();
       
     mtr_cmd_a( (right_mtr/abs(right_mtr) * mtr_cmd_a_Output)); // send +/-  mtr_cmd_a_Output for rotation
+    PRINTF((right_mtr/abs(right_mtr) * mtr_cmd_a_Output));
     mtr_cmd_b( (left_mtr/abs(left_mtr) * mtr_cmd_b_Output));  
+    PRINTF((left_mtr/abs(left_mtr) * mtr_cmd_b_Output));
 
 }
 
 void stop() {
+  MOTOR_WAKE;
   //Aye Capt! FULL STOP!
   // Brakes //
    // Work on migrating this to a decellerate funct in future.
 
-  bot_ctl_velocity = 0; // Set global bot velocity factor to 0.
-  bot_ctl_rotation = 0; ;// Set global rotation factor to FALSE
-  mtr_cmd_a(0);
-  mtr_cmd_b(0);
-
+  // bot_ctl_velocity = 0; // Set global bot velocity factor to 0.
+  // bot_ctl_rotation = 0; ;// Set global rotation factor to FALSE
+  // mtr_cmd_a(0);
+  // mtr_cmd_b(0);
+/*
   mtr_ctl_a(0,0); // set motors to zero
   mtr_sen_stat_a = 0;
 
   mtr_ctl_b(0,0);
    mtr_sen_stat_b = 0;
-
-   digitalWrite(MOTOR_AIN1, HIGH);
-   digitalWrite(MOTOR_AIN2, HIGH);
+*/
+   /*
+   digitalWrite(MOTOR_AIN1, LOW);
+   digitalWrite(MOTOR_AIN2, LOW);
    analogWrite(MOTOR_PWMA,0);
    
-   digitalWrite(MOTOR_BIN1, HIGH);
-   digitalWrite(MOTOR_BIN2, HIGH);
+   digitalWrite(MOTOR_BIN1, LOW);
+   digitalWrite(MOTOR_BIN2, LOW);
    analogWrite(MOTOR_PWMB,0);  
+*/
+  mtr_ctl_a(0,0); // set motors to zero
+  mtr_sen_stat_a = 0;
+
+  mtr_ctl_b(0,0);
+  mtr_sen_stat_b = 0;
+
+  WAIT(10);
+  digitalWrite(MOTOR_AIN1, LOW);
+  digitalWrite(MOTOR_AIN2, LOW);
+  analogWrite(MOTOR_PWMA,0);
+   
+  digitalWrite(MOTOR_BIN1, LOW);
+  digitalWrite(MOTOR_BIN2, LOW);
+  analogWrite(MOTOR_PWMB,0); 
+
    //WAIT(1);
 }
 
 void bot_ctl_forward(int speed){
+  MOTOR_WAKE;
   mtr_ctl_speed_a = mtr_ctl_speed ;
   mtr_ctl_a(false, mtr_ctl_speed_a);
 
@@ -685,117 +920,96 @@ void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotat
     }
 }
 
-int sonar_ping(int num = 0 ){  // take a sample number of pings and return rounded avg in CM. Sum adds 1cm to reserve 0 as an error situation. since this is only used as bumper and not measuerment we dont care much atm.
-    float duration, distance; 
-    int sum = 1, cnt = 0; 
-
-  while (cnt < bot_sen_sonar_ping_cnt)
-  {
-    if (num == 0){ //default ping fwd sonar
-   // Write 10 MicroSec pulse to trigger pin.
-        digitalWrite(trigPinFwd,LOW);// ensure set LOW to start. 
-        delayMicroseconds(2); 
-        digitalWrite(trigPinFwd,HIGH);
-        delayMicroseconds(10);
-        digitalWrite(trigPinFwd,LOW);  
-       // measure response
-    duration = pulseIn(echoPinFwd,HIGH);
-    } else if (num == 1) // ping rear sonar
-    {
-         // Write 10 MicroSec pulse to trigger pin.
-        digitalWrite(trigPinRear,LOW);// ensure set LOW to start. 
-        delayMicroseconds(2); 
-        digitalWrite(trigPinRear,HIGH);
-        delayMicroseconds(10);
-        digitalWrite(trigPinRear,LOW);  
-       // measure response
-    duration = pulseIn(echoPinRear,HIGH);
-    }
-    
-
-    // calculate distance in CM
-    distance = (duration / 2) * 0.0343; // speed of sound at sea level 20C 343 m/s  adjust for cond?
-    // send results to serial montior
-    //Serial.print ("Distance = ");
-
-   if (distance >= 400 || distance <= 2 ){
-      // Serial.println("Out Of Range");
-      distance = 0;
-      // sum += round(distance);    
-      
-   } else {
-      // Serial.println(round(distance));
-      // Serial.print(" cm\n");
-      // WAIT(1000);
-      sum += round(distance); // add measurment
-      cnt++; // increment ping counter that is tested against global config var int bot_sen_ping_cnt
-   }
-    WAIT(1);  
-
-  }
-  int avg =  sum / cnt;
-    //PRINTF(avg);
-    return avg;
-
-}
-
-void ir_ping(){
-  
-  bot_sen_ir_right_ping = IRsensorRight.getDistance();
-
-  bot_sen_ir_left_ping = IRsensorLeft.getDistance();
-
-  if( digitalRead(IRPin_FWD)  == HIGH ){
-    bot_sen_ir_fwd_ping = true;
-  } else bot_sen_ir_fwd_ping = false;
-  // Rear IR disconnected pending replacement. Mar 1 2022 probably not required in final build anyway
-  if( digitalRead(IRPin_Rear)  == HIGH ){
-    bot_sen_ir_rear_ping = true;
-  } else bot_sen_ir_rear_ping = false;
-  WAIT(1);
-}
 
 
 void svc_ping( ASIZE delay){ // PING service function.
     
   while (1)
   {
-    bot_sen_sonar_fwd_ping = sonar_ping(0);
+    ir_ping(); // Analog IR side sensors update global vars
+    bot_sen_sonar_fwd_ping = sonar_ping(0); // 0 = FWD 1 = Rear
     WAIT(1); // stagger sonar pings by 1 ms
     bot_sen_sonar_rear_ping = sonar_ping(1);
-    ir_ping(); // Analog IR side sensors update global vars
-
+    
+    //PRINTF("DEBUG!");
     WAIT(delay);
   }  
 }
 
+void motor_test (ASIZE delay)
+
+{
+  while (1)
+  {
+    
+   MOTOR_WAKE;
+   int speed = 150;
+   digitalWrite(MOTOR_AIN1, HIGH);
+   digitalWrite(MOTOR_AIN2, LOW);
+   analogWrite(MOTOR_PWMA, speed);
+   PRINTF("FWD A ");
+   WAIT(delay);
+   
+   stop();
+   WAIT(1000);
+   
+   digitalWrite(MOTOR_AIN1, LOW);
+   digitalWrite(MOTOR_AIN2, HIGH);
+   analogWrite(MOTOR_PWMA, speed);
+   PRINTF("REV A ");
+   WAIT(delay);
+
+
+   stop();
+  WAIT(1000);
+
+   digitalWrite(MOTOR_BIN1, HIGH);
+   digitalWrite(MOTOR_BIN2, LOW);
+   analogWrite(MOTOR_PWMB, speed);
+   PRINTF("FWD B ");
+  
+   WAIT(delay);
+   stop();
+  WAIT(1000);
+   digitalWrite(MOTOR_BIN1, LOW);
+   digitalWrite(MOTOR_BIN2, HIGH);
+   analogWrite(MOTOR_PWMB, speed);
+   PRINTF("REV B ");
+   WAIT(delay);
+   stop();
+   WAIT(5000);
+   
+   }
+
+}
+
 void svc_encoders(ASIZE ignored){ // 10Hz Wheel encoder update function
      unsigned long x = sysclock;
-     int interval = 1000;
+     int interval = 250;
      int posPrev_a, posPrev_b, deltaA, deltaB;
      posPrev_a = mtr_sen_pos_a;
      posPrev_b = mtr_sen_pos_b;
-     
+
     while(1){
-     // This ATOMIC_BLOCK reads the encoders and calculates the RPM for each motor during the interrupts then moves the data to globals that we can use. 
+     // This ATOMIC_BLOCK reads the encoders moves the data to globals that we can use. "Safely" 
       ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
-        mtr_sen_pos_a = mtr_cal_pos_a; 
-        mtr_sen_pos_b = mtr_cal_pos_b; 
+       mtr_sen_pos_a = mtr_cal_a_encoder0Pos;    // MTR A encoder 
+       mtr_sen_pos_b = mtr_cal_b_encoder1Pos ; // MTRB encoder
         
       }
-      if (sysclock >= (x + interval) ){ // if we have passed interval time (1000ms)          
+      if (sysclock >= (x + interval) ){ // if we have passed interval time           
         // calc delta pos
             deltaA = abs(abs(mtr_sen_pos_a) - abs(posPrev_a));
             if(deltaA){
-              mtr_sen_clicks_per_sec_a = deltaA;
+              mtr_sen_clicks_per_a = deltaA;
               } else{
-                mtr_sen_clicks_per_sec_a = 0;
+                mtr_sen_clicks_per_a = 0;
               }
             deltaB = abs(abs(mtr_sen_pos_b) - abs(posPrev_b));
             if (deltaB)  {  
-              mtr_sen_clicks_per_sec_b = deltaB;    
+              mtr_sen_clicks_per_b = deltaB;    
               } else{
-                mtr_sen_clicks_per_sec_b = 0;
+                mtr_sen_clicks_per_b = 0;
               }
           // reset for next run
         
@@ -809,10 +1023,26 @@ void svc_encoders(ASIZE ignored){ // 10Hz Wheel encoder update function
   
 }
 
+void bot_svc_bt_pin_monitor(ASIZE delay){
+  while (1)
+  {
+    Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
+    
+    PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app
+    
+    PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app  /* code */
+    WAIT(delay);
+  }
+  
+  
+}
 
 void bot_motor_cmd_svc ( ASIZE delay){ // Motor Command Service Function
   while (1)
   {
+    // DISABLING THIS PID FOR NOW DUE TO "Hardware Failure. Mar 07"
+    bot_ctl_Motor_PID_Enable = false;
+
     if (bot_ctl_Motor_PID_Enable)
     {
     bot_motor_command();  
@@ -828,28 +1058,10 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
   while (1)
   {
     Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
-
-    /* BEGIN BlueTooth Terminal Code *** TBD ** Move to seperate function */
-    while (Serial.available() != 0)
-  {
-    Serialdata = String(Serialdata + char(Serial.read()));
-    dataflag = 1;
-  }
-    
-  if (dataflag == 1)
-  {
-    Terminal.print(Serialdata);
-    Serialdata = "";
-    dataflag = 0;
-  }
- if(Terminal.available())
-  {
-    while (Terminal.available() != 0)
-    {
-      Serial.write(Terminal.read());
+    if (DEBUG){
+      //PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app. Currently causes hang. BUG TBD.
+      //PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app
     }
-    Serial.println();
-  }
 
     /* BEGIN Game Pad Code. *** TBD ** Move to seperate function */
     // cmd aliases for clarity
@@ -863,14 +1075,14 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
     bool cross = GamePad.isCrossPressed();
 
   if (GamePad.isStartPressed()){
-    bot_ctl_Motor_PID_Enable = true;
+    //bot_ctl_Motor_PID_Enable = true;
     WAIT(20);
     continue;
     
   }
   if (GamePad.isSelectPressed()){
     // make a selction.
-    bot_ctl_Motor_PID_Enable = false;
+    //bot_ctl_Motor_PID_Enable = false;
     WAIT(20);
     continue;
   }
@@ -878,21 +1090,13 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
   if ( up or down or left or right or circle or square or triangle or cross){ // a movement key was pressed 
 
     if( up)  {
-      if(bot_ctl_Motor_PID_Enable){ 
-        bot_ctl_velocity = 75;
-        } else {
-          bot_ctl_forward(mtr_ctl_speed);
-        }
-      
+      bot_ctl_forward(mtr_ctl_speed);     
       WAIT(delay);
     } 
 
     if (down)   {
-      if(bot_ctl_Motor_PID_Enable){ 
-        bot_ctl_velocity = -75;
-        } else {
-          bot_ctl_backward (mtr_ctl_speed);
-        }
+      bot_ctl_backward (mtr_ctl_speed);
+      WAIT(delay);
     } 
 
     if (left)
@@ -1014,27 +1218,32 @@ void setup()
     #endif
 
     pid_count = 0; current = 0;
-   // create_task((char *)"MOTOR_TEST_A",motor_test_a,2000, MINSTACK );
-   //  create_task((char *)"MOTOR_TEST_B",motor_test_b,2000, MINSTACK );
-   // create_task((char *)"CRUISE",bot_cruise,300, MINSTACK);
-    //create_task((char *)"ENCDR",svc_read_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored.
 
-    /**************TASKS *******************/
+
+   // create_task((char *)"MTRTST",motor_test,5000, MINSTACK );
+   
+   // create_task((char *)"CRUISE",bot_cruise,300, MINSTACK);
+   
+    /************** TASKS *******************/
+    // EX 2000ms:  create_task((char *)"TSKNAM",function_name,2000, MINSTACK );
     
     // LMX Tasks
     create_task((char *)"IDLE",cpu_idle,0,MINSTACK);
-    create_task((char *)"STATS",stats_task,20000,MINSTACK*4);
+    create_task((char *)"STATS",stats_task,15000,MINSTACK*4);
     create_task((char *)"SIGNON",signon,1,MINSTACK*4);
     
     // Level 1 System Tasks
+    
     create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and getting with LMX
     create_task((char *)"FLASH",flash,800,MINSTACK); // heatbeat. kept as example of how to use semaphore setting
-    create_task((char *)"CONLOG",console_log,2000,MINSTACK*2); // logging to serial output
+    create_task((char *)"CONLOG",console_log,5000,MINSTACK*2); // logging to serial output
 
     // Level 2 Services     
-    create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored. Encoders sample 10Hz every 100ms. 
-    create_task((char *)"PING",svc_ping,10, MINSTACK); // IR and Sonar Ping service
-    create_task((char *)"MTRCMD",bot_motor_cmd_svc,1, MINSTACK); // Bot Motor Command service
+    create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored.
+    create_task((char *)"PING",svc_ping,10, MINSTACK*2); // IR and Sonar Ping service
+    // create_task((char *)"MTRCMD",bot_motor_cmd_svc,1, MINSTACK); // Bot Motor Command service
+    // create_task((char *)"MENTOR",bot_svc_bt_pin_monitor,10, MINSTACK); // Pin Monitor. ???not wrking 8()
+    
 
     // Level 3 Controls
     create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth User Input Controler
