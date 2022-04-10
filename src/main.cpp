@@ -1,10 +1,15 @@
 /* -------------------------------------- */
 /* 
 Bum Biter Bot MK 2.0
+*   09 Apr 2022 RM - Installed SerialTranserfer
+                   - Code and comments clean up. 
+                   - Migrated code to github.
+                   - changed default serial port to ttyACM1 in platformio.ini
+
 *   15 Mar 2022 RM - Implemented new encoder counter functions to increse the resoultion of the counts. I'm getting 4 times more! 8D
                       |-> Made new backup before began. 
                       |-> https://github.com/vinay-lanka/navbot_hardware/blob/master/encodertest/encodertest.ino
-                   - 
+                    
 *   13 Mar 2022 RM - Continued Troubleshooting of new shield. Success. 
 *   11 Mar 2022 RM - changing PINS to accomodate for new board shield configuration 
 
@@ -48,26 +53,23 @@ Bum Biter Bot MK 2.0
  *            - HM-10 V3 BT 4.0 on Serial3   
 
  *     Software:
- *            - libtask LMX from D.P. Anderson  as a scheduler 
+ *            - libtask LMX from D.P. Anderson as a scheduler 
  *            - Stole this IR sensor lib https://github.com/qub1750ul/Arduino_SharpIR 
- *            - Currently Porting from Mk1. Unamed custom written TB6612fng Motor Driver functions that should probably move to a inc or lib later.
+ *            - Currently Porting from Mk1 hardware. Unamed custom written TB6612fng Motor Driver functions that should probably move to a inc or lib later.
  *            - Blue Tooth interface using libraries from Dabble https://thestempedia.com/docs/dabble/game-pad-module/
  *            - SerialTransfer https://github.com/PowerBroker2/SerialTransfer
  *          
  * 
  *  TO-DO List: 
+ *            - Convert all dependencies to PlatformIO libdeps.
+ *            - Move documentation and activit log out of source code.
  *            - Add/fix ability to send some console DEBUG log info back over serial BT console.
  *            - Add visual feedback RGB LEDs
  *            - Add Speaker. 
- *            - Add IMU
  *            - BUG. When Arduino reboots BT connection is problematic.
  *              |-> Connect the appropriate reset ping to the BT module and have it restart when the sketch does.
  *                |-->Make sure above is run time configurable option ALSO a tirggerable event.
- *            - BUG. Time out required for HC-SRO4. Default of 1000ms causes issues if conection faults.  
- * 
- *            - Too long for now.
- *         
- *               
+ *            - BUG. Time out functioning required for HC-SRO4. Default of 1000ms causes issues if the conection faults.  
  *  
  */
 /* -------------------------------------- */
@@ -91,22 +93,22 @@ Bum Biter Bot MK 2.0
 
 // Sensors
 #include <SharpIR.h> // IR Distance Sensors
-
 #include <PID_v1.h> // PID https://playground.arduino.cc/Code/PIDLibrary/
 
 // BlueTooth Config
-#define CUSTOM_SETTINGS
-#define INCLUDE_GAMEPAD_MODULE
-#define INCLUDE_TERMINAL_MODULE
-#define INCLUDE_PINMONITOR_MODULE
-
-/*
-   Gamepad module provides three different mode namely Digital, JoyStick and Accerleometer. 
-   You can reduce the size of library compiled by enabling only those modules that you want to
-   use. For this first define CUSTOM_SETTINGS followed by defining INCLUDE_modulename.
-   Explore more on: https://thestempedia.com/docs/dabble/game-pad-module/
-*/
-#include <Dabble.h> // Dabble Bluetooth Contoller
+#include <Dabble.h> // Dabble Bluetooth Contoller. https://thestempedia.com/docs/dabble
+#define CUSTOM_SETTINGS // You can reduce the size of compiled library by enabling only modules you want to use. First define CUSTOM_SETTINGS followed by #define INCLUDE_modulename
+#define INCLUDE_GAMEPAD_MODULE // Include Dabble Gamepad module https://thestempedia.com/docs/dabble/game-pad-module
+ 
+// SERIAL TRANSFER 
+#define mySerialConn Serial2  // Define the UART to use for communication with ROS2 controler.
+#include <SerialTransfer.h> // https://github.com/PowerBroker2/SerialTransfer
+SerialTransfer rxSerailTransfer; // create Receive Transfer Obj
+struct ctrlmsg { 
+  float x;
+  float z;
+  char  debug[128];
+} botmsg; // create a control message struct to hold Datum Obj from ROS2 Controler > ctrlmsg >SerailTransfer "datum" >UART>botmsg.
 
 
 /* ------------ <dpa> -------------------------- */
@@ -189,7 +191,6 @@ void printkbuf(char *s) {  // dpa
 // Wake up motor driver from low power standby
 #define MOTOR_WAKE digitalWrite(MOTOR_STBY, HIGH) 
 
-
 /* 
 STATE VARIABLES 
 scope_type_name
@@ -205,14 +206,12 @@ scope_type_name
                      
 
 */
-
 int bot_init_runlvl  = 5; // Default init level.
 char bot_sys_debug[] = ""; // string to hold debug output.
 String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
 bool dataflag = 0;
 
 /********** MOTOR GLOBALS **********/
-
 // Motor CONTORL
 int mtr_ctl_speed = 150; // CFG > default drive speed. tweak these as req either here or runtime
 int mtr_ctl_pivot_speed = 150; // CFG > default pivot turn speed. 
@@ -414,13 +413,14 @@ float clip(float value, float min, float max ){ // dpa inspired cliping function
 /* LVL 1 INIT Functions */
 
 // led heartbeat init 
-void init_1_led_heartbeat(void)
-{
+void init_1_led_heartbeat(void){
      pinMode(LED_HEARTBEAT_PIN, OUTPUT); 
 }
-/* ----------------------------------------- */
 
-/* LVL 2 INIT Functions */
+void init_1_serial_transerfer(void){
+    mySerialConn.begin(BAUDRATE);// Testing rate. we may change this to be faster.
+}
+/* LVL 2 INIT Functions */ 
 
 void init_2_sonar_setup(){
     pinMode(trigPinFwd, OUTPUT);
@@ -717,6 +717,9 @@ void mtr_cmd_b(int speed){
 }
 
 void bot_motor_command(){
+  // !!!THIS IS BROEKN!!!  :(  Scrap this maybe.
+    return;
+
     // Calc right and left motor inputs based on global  Velocity and rotation factors
     int left_mtr = bot_ctl_velocity + bot_ctl_rotation; 
     int right_mtr = bot_ctl_velocity - bot_ctl_rotation;
@@ -732,9 +735,9 @@ void bot_motor_command(){
     mtr_cmd_b_PID.Compute();
       
     mtr_cmd_a( (right_mtr/abs(right_mtr) * mtr_cmd_a_Output)); // send +/-  mtr_cmd_a_Output for rotation
-    PRINTF((right_mtr/abs(right_mtr) * mtr_cmd_a_Output));
+//    PRINTF((right_mtr/abs(right_mtr) * mtr_cmd_a_Output));
     mtr_cmd_b( (left_mtr/abs(left_mtr) * mtr_cmd_b_Output));  
-    PRINTF((left_mtr/abs(left_mtr) * mtr_cmd_b_Output));
+//    PRINTF((left_mtr/abs(left_mtr) * mtr_cmd_b_Output));
 
 }
 
@@ -837,6 +840,18 @@ void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotat
       // BACK  MTR B
       mtr_ctl_b(1, mtr_ctl_pivot_speed);
     }
+}
+
+void svc_serial_conn (ASIZE delay){ // Internal UART connection Manager
+  while(1){
+
+  if(rxSerailTransfer.available()){ 
+    rxSerailTransfer.rxObj(botmsg); // place the Rx Object recieved into botmsg
+   // PRINTF(botmsg.x); // For TESTING remove me later.
+   // PRINTF(botmsg.z); // For TESTING remove me later.
+  }
+  WAIT(delay);
+  }
 }
 
 void svc_ping( ASIZE delay){ // PING service function.
@@ -1089,6 +1104,7 @@ void system_init(void)
     Serial.begin(BAUDRATE); 
     Dabble.begin(9600);  //Enter baudrate of your bluetooth module 
     init_1_led_heartbeat(); // LED heartbeat
+    init_1_serial_transerfer(); // Bot Msg Serail Connection
     init_2_sonar_setup(); // Initalize sonar
     init_3_motors_setup(); // Motor Init    
 
@@ -1116,6 +1132,8 @@ void setup()
     printv = printkbuf;
 
     PRINTF("Howdy Console!\n");
+    
+    rxSerailTransfer.begin(mySerialConn);
 
     #if ((MACHINE == MACH_AVR) || (MACHINE == MACH_ARM)) /* ARM is Teensy3.1 */ // <dpa> libtask set in task.h
     delay(1500);   /* hardware delay, sysclock not running yet */
@@ -1136,9 +1154,10 @@ void setup()
     
     // Level 1 System Tasks
     
-    create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and getting with LMX
-    create_task((char *)"FLASH",flash,800,MINSTACK); // heatbeat. kept as example of how to use semaphore setting
-    create_task((char *)"CONLOG",console_log,5000,MINSTACK*2); // logging to serial output
+    create_task((char *)"SERIAL",svc_serial_conn,1, MINSTACK*4); // update UART connection with ROS2 Controler.
+    create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and fetching with LMX
+    create_task((char *)"FLASH",flash,800,MINSTACK); // Timing part of heatbeat. kept as example of how to use semaphore setting 
+    create_task((char *)"CONLOG",console_log,5000,MINSTACK*2); // Dev logging to USB Serial output
 
     // Level 2 Services     
     create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored.
