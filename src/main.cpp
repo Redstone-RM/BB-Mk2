@@ -323,42 +323,21 @@ void console_log(ASIZE delay)
   while (1) {
 
     if(DEBUG){
-    // run BT update commands
-
     debug_msg = "";
     debug_msg += ("======================== STATUS: ONLINE  ========================\n"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
     debug_msg +=  ("FWD SONAR :\t") + String (bot_sen_sonar_fwd_ping) + "\t";    
     debug_msg +=  ("REAR SONAR:\t") + String (bot_sen_sonar_rear_ping) +"\n" ; 
     debug_msg +=  ("RIGHT IR:\t") + String (bot_sen_ir_right_ping) +"\t";
-    debug_msg +=  ("LEFT IR:\t") + String (bot_sen_ir_left_ping) +"\t\n";
-    
+    debug_msg +=  ("LEFT IR:\t") + String (bot_sen_ir_left_ping) +"\t\n";  
     debug_msg += ("\n==== MOTORS ====\n#MOTOR\t\tCPS\t\tROT\t\tCNT\n");
-    
     debug_msg +=  "Motor A\t\t" + String( mtr_sen_clicks_per_a * 4) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
     debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_b * 4 )  + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
     
-    //debug_msg +=  "Motor A\t\t" + String(mtr_sen_rpm_a) + "\t\t" + String (mtr_sen_speed_a) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
-    //debug_msg +=  "Motor B\t\t" + String(mtr_sen_rpm_b) + "\t\t" + String (mtr_sen_speed_b) + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
     
     PRINTF(debug_msg);
     //bot_sys_bt_conlog("Motor A\nRPM:" + String(mtr_sen_rpm_a) + "\nSPD: " + String (mtr_sen_speed_a) + "\nROT: " + String( mtr_sen_stat_a) +"\nPOS: " + String(mtr_sen_pos_a)+"\n");
     //bot_sys_bt_conlog("Motor B\nRPM:" + String(mtr_sen_rpm_b) + "\nSPD: " + String (mtr_sen_speed_b) + "\nROT: " + String( mtr_sen_stat_b) +"\nPOS: " + String(mtr_sen_pos_b)+"\n");
-    
-     
-
-/*    
-    PRINTF("IR Right:\t");
-    PRINTF (bot_sen_ir_right_ping); 
-    
-    PRINTF("IR Left:\t");
-    PRINTF (bot_sen_ir_left_ping); 
-
-    PRINTF("IR FWD:\t");
-    PRINTF (bot_sen_ir_fwd_ping); 
-
-    PRINTF("IR Rear:\t");
-    PRINTF (bot_sen_ir_rear_ping); 
-*/
+ 
     }
     
     WAIT(delay);   
@@ -423,7 +402,7 @@ float clip(float value, float min, float max ){ // dpa inspired cliping function
 
 /* 
 -----------------------------------------  INIT Section ------------------------------------------
- TBD - Emulate a sysV type init function system. 
+ TBD maybe? - Emulate a sysV type init function system. 
 
 // init functions are named init_runlevel_class_name
 // runlevels 
@@ -434,7 +413,6 @@ float clip(float value, float min, float max ){ // dpa inspired cliping function
 --------------------------------------------------------------------------------------------------
 */
 
-
 /* LVL 1 INIT Functions */
 
 // led heartbeat init 
@@ -442,7 +420,6 @@ void init_1_led_heartbeat(void)
 {
      pinMode(LED_HEARTBEAT_PIN, OUTPUT); 
 }
-
 /* ----------------------------------------- */
 
 /* LVL 2 INIT Functions */
@@ -454,42 +431,9 @@ void init_2_sonar_setup(){
     pinMode(trigPinRear, OUTPUT);
     pinMode(echoPinRear, INPUT);
 }
-
-void init_2_IR_setup(){
- // pinMode(IRPin_FWD, INPUT); //  the 2 digital IR sensors
- // pinMode(IRPin_Rear, INPUT);
- // Disabled mar12 2020 RM
-}
-
 /* LVL 3 INIT Functions */
-/*
-void bot_mtr_a_readEncoder(){  // run on INT and increment or decrement the wheel counter. Each wheel is as independant as possible.
-  // Read encoder B when encoder A rises
-  int mtra_encb = digitalRead(MTRA_ENCB);
-  if(mtra_encb>0){
-    mtr_cal_pos_a++; // these globals are volatile. They are read in an ATOMIC_BLOCK    
-  }
-  else {
-    mtr_cal_pos_a--; // these globals are volatile. They are read in an ATOMIC_BLOCK 
 
-  }
-
-}
-
-void bot_mtr_b_readEncoder(){ // run on INT and increment or decrement the wheel counter. Each wheel is as independant as possible.
-  // Read encoder B when encoder A rises
-  int mtrb_encb = digitalRead(MTRB_ENCB);
-  if(mtrb_encb>0){  
-    mtr_cal_pos_b++;// these globals are volatile. They are read in an ATOMIC_BLOCK 
-  }
-  else {
-    mtr_cal_pos_b--; // these globals are volatile. They are read in an ATOMIC_BLOCK 
-  }
-}
-*/
-
-// ************** encoder MTR A *********************
-void doEncoderA(){  
+void doEncoderA(){  // ************** Encoder MTR A *********************
 
   // look for a low-to-high on channel A
   if (digitalRead( MTRA_ENCA) == HIGH) { 
@@ -543,9 +487,7 @@ void doEncoderB(){
   
 }
 
-// ************** encoder MTR B *********************
-
-void doEncoderC(){  
+void doEncoderC(){  // ************** Encoder MTR B *********************
 
   // look for a low-to-high on channel A
   if (digitalRead(MTRB_ENCA) == HIGH) { 
@@ -612,8 +554,6 @@ void init_3_motors_setup() {
   pinMode(MTRB_ENCA, INPUT);  
   pinMode(MTRB_ENCB, INPUT);
   
-  // attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), bot_mtr_a_readEncoder, RISING); // set interupts
-  // attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), bot_mtr_b_readEncoder, RISING); // set interups 
   attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), doEncoderA, CHANGE);
   attachInterrupt(digitalPinToInterrupt(MTRA_ENCB ), doEncoderB, CHANGE); 
 
@@ -628,17 +568,12 @@ void init_3_motors_setup() {
   
 }
 
-
-
 int sonar_ping(int num = 0 ){  // take a sample number of pings and return rounded avg in CM. Sum adds 1cm to reserve 0 as an error situation. since this is only used as bumper and not measuerment we dont care much atm.
     float duration = 0, distance; 
     int sum = 1, cnt = 0; 
- 
-
 
   while (cnt < bot_sen_sonar_ping_cnt)
   { 
-    
     if (num == 0){ //default ping fwd sonar
    // Write 10 MicroSec pulse to trigger pin.
         digitalWrite(trigPinFwd,LOW);// ensure set LOW to start. 
@@ -690,26 +625,11 @@ int sonar_ping(int num = 0 ){  // take a sample number of pings and return round
 }
 
 void ir_ping(){
-  
   bot_sen_ir_right_ping = IRsensorRight.getDistance();
-
   bot_sen_ir_left_ping = IRsensorLeft.getDistance();
-  /*
-  if( digitalRead(IRPin_FWD)  == HIGH ){
-    bot_sen_ir_fwd_ping = true;
-  } else bot_sen_ir_fwd_ping = false;
-  // Rear IR disconnected pending replacement. Mar 1 2022 probably not required in final build anyway
-  if( digitalRead(IRPin_Rear)  == HIGH ){
-    bot_sen_ir_rear_ping = true;
-  } else bot_sen_ir_rear_ping = false;
-  */
-  //PRINTF("[DEBUG]: IR PING");
   WAIT(1);
-
 }
-
 /* Level 5 Control Functions */
-
 
 void mtr_ctl_a(bool rev = false, int speed = 0 ) {
   MOTOR_WAKE;
@@ -797,6 +717,7 @@ void mtr_cmd_b(int speed){
   }
 
 }
+
 void bot_motor_command(){
     // Calc right and left motor inputs based on global  Velocity and rotation factors
     int left_mtr = bot_ctl_velocity + bot_ctl_rotation; 
@@ -920,8 +841,6 @@ void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotat
     }
 }
 
-
-
 void svc_ping( ASIZE delay){ // PING service function.
     
   while (1)
@@ -1027,9 +946,7 @@ void bot_svc_bt_pin_monitor(ASIZE delay){
   while (1)
   {
     Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
-    
     PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app
-    
     PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app  /* code */
     WAIT(delay);
   }
@@ -1164,28 +1081,23 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
   
 }
 
-
-/* --------------------------------------------------------------------------------------------------------------------------- */
-
-/* system_init  - Add all other runlevel init functions  */
+/* --------------------------------------------------------------------------------------------------------------------------- 
+ system_init  - Add all other runlevel init functions  
+ --------------------------------------------------------------------------------------------------------------------------- */
 void system_init(void)
 {
     /* AVR & ARM Teesy3.1  */
     sysclock_init(); //  <dpa>. clock.
     Serial.begin(BAUDRATE); 
-    Dabble.begin(9600);  //Enter baudrate of your bluetooth module
-
+    Dabble.begin(9600);  //Enter baudrate of your bluetooth module 
     init_1_led_heartbeat(); // LED heartbeat
     init_2_sonar_setup(); // Initalize sonar
-    init_3_motors_setup(); // Motor Init
-    
-    
+    init_3_motors_setup(); // Motor Init    
+
 }
-/* ----------------------------------------- */
 
 /* ------------ <dpa> -------------------------- */
 /* Create signon and terminate task */
-
 void signon(ASIZE version)
 {
   PRINTF(VERSION);
@@ -1194,22 +1106,16 @@ void signon(ASIZE version)
   DELAY(1000);
   terminate();
 }
-/* ----------------------------------------- */
 
-/* 
------------------------------------------  MAIN ------------------------------------------
+/*-----------------------------------------  MAIN ------------------------------------------
 
- this is for the Arduino IDE "sketch" set up 
-------------------------------------------------------------------------------------------
-*/
+------------------------------------------------------------------------------------------*/
 
 void setup()
 
 {
- 
     system_init();
     printv = printkbuf;
-
 
     PRINTF("Howdy Console!\n");
 
@@ -1220,9 +1126,7 @@ void setup()
     pid_count = 0; current = 0;
 
 
-   // create_task((char *)"MTRTST",motor_test,5000, MINSTACK );
-   
-   // create_task((char *)"CRUISE",bot_cruise,300, MINSTACK);
+   // create_task((char *)"MTRTST",motor_test,5000, MINSTACK );   
    
     /************** TASKS *******************/
     // EX 2000ms:  create_task((char *)"TSKNAM",function_name,2000, MINSTACK );
@@ -1241,14 +1145,11 @@ void setup()
     // Level 2 Services     
     create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored.
     create_task((char *)"PING",svc_ping,10, MINSTACK*2); // IR and Sonar Ping service
-    // create_task((char *)"MTRCMD",bot_motor_cmd_svc,1, MINSTACK); // Bot Motor Command service
     // create_task((char *)"MENTOR",bot_svc_bt_pin_monitor,10, MINSTACK); // Pin Monitor. ???not wrking 8()
     
 
     // Level 3 Controls
     create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth User Input Controler
-
-    
 
     scheduler(); // Main LMX task scheduler
     PRINTF("Should never get here."); // Leave this alone.
