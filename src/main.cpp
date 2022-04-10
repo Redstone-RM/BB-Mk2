@@ -5,7 +5,6 @@ Bum Biter Bot MK 2.0
                       |-> Made new backup before began. 
                       |-> https://github.com/vinay-lanka/navbot_hardware/blob/master/encodertest/encodertest.ino
                    - 
-
 *   13 Mar 2022 RM - Continued Troubleshooting of new shield. Success. 
 *   11 Mar 2022 RM - changing PINS to accomodate for new board shield configuration 
 
@@ -47,14 +46,13 @@ Bum Biter Bot MK 2.0
  *            - Sharp GP20D21 21CM Digital IR Distance sensor mounted fwd as a backup to Ultrasonic as some materials and situations are blind to one or ther other. 
  *            - Not yet moved from mk1 is the Passive Piezo speaker for 8bit jams
  *            - HM-10 V3 BT 4.0 on Serial3   
- *            
- *  
+
  *     Software:
- *        
  *            - libtask LMX from D.P. Anderson  as a scheduler 
  *            - Stole this IR sensor lib https://github.com/qub1750ul/Arduino_SharpIR 
  *            - Currently Porting from Mk1. Unamed custom written TB6612fng Motor Driver functions that should probably move to a inc or lib later.
  *            - Blue Tooth interface using libraries from Dabble https://thestempedia.com/docs/dabble/game-pad-module/
+ *            - SerialTransfer https://github.com/PowerBroker2/SerialTransfer
  *          
  * 
  *  TO-DO List: 
