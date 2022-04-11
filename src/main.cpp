@@ -103,12 +103,28 @@ Bum Biter Bot MK 2.0
 // SERIAL TRANSFER 
 #define mySerialConn Serial2  // Define the UART to use for communication with ROS2 controler.
 #include <SerialTransfer.h> // https://github.com/PowerBroker2/SerialTransfer
-SerialTransfer rxSerailTransfer; // create Receive Transfer Obj
+SerialTransfer rxSerialTransfer; // create Rx Receive Transfer Obj
 struct ctrlmsg { 
   float x;
   float z;
   char  debug[128];
 } botmsg; // create a control message struct to hold Datum Obj from ROS2 Controler > ctrlmsg >SerailTransfer "datum" >UART>botmsg.
+
+SerialTransfer txSerialTransfer; // create Tx Transmit Transfer Obj
+struct statmsg { 
+  float x; // Confirm current X value. Feedback 
+  float z; // Confirm current Z value. Feedback
+  int   mtr_pos_right; // right motor encoder position
+  int   mtr_pos_left; // left motor encoder position
+  int   mtr_speed_right;  // motor a speed
+  int   mtr_speed_left;  // motor b speed
+  int   sen_sonar_fwd; // forward sonar value
+  int   sen_sonar_rear; // rear sonar value
+  int   sen_ir_right; // right IR value
+  int   sen_ir_left; // left IR value
+  char  debug[128]; // short logging message
+} statmsg; // create a status message struct
+
 
 
 /* ------------ <dpa> -------------------------- */
@@ -207,7 +223,7 @@ scope_type_name
 
 */
 int bot_init_runlvl  = 5; // Default init level.
-char bot_sys_debug[] = ""; // string to hold debug output.
+char bot_sys_debug[] = ""; // string to hold debug output. For Serial or logging
 String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
 bool dataflag = 0;
 
@@ -219,9 +235,6 @@ int mtr_ctl_speed_a = 0;  // to set motor a speed
 int mtr_ctl_speed_b = 0;  // set motor b speed
 
 // Motor Virtual Sensors
-volatile int mtr_cal_pos_a = 0; // motor A positional counts +/- // volatiles are read in an ATOMIC_BLOCK
-volatile int mtr_cal_pos_b = 0; // motor B positional counts +/- volatiles are read in an ATOMIC_BLOCK
-
 volatile long mtr_cal_a_encoder0Pos = 0;    // MTR A encoder 
 volatile long mtr_cal_b_encoder1Pos = 0;    // MTR B encoder 
 
@@ -845,8 +858,8 @@ void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotat
 void svc_serial_conn (ASIZE delay){ // Internal UART connection Manager
   while(1){
 
-  if(rxSerailTransfer.available()){ 
-    rxSerailTransfer.rxObj(botmsg); // place the Rx Object recieved into botmsg
+  if(rxSerialTransfer.available()){ 
+    rxSerialTransfer.rxObj(botmsg); // place the Rx Object recieved into botmsg
    // PRINTF(botmsg.x); // For TESTING remove me later.
    // PRINTF(botmsg.z); // For TESTING remove me later.
   }
@@ -1133,7 +1146,7 @@ void setup()
 
     PRINTF("Howdy Console!\n");
     
-    rxSerailTransfer.begin(mySerialConn);
+    rxSerialTransfer.begin(mySerialConn);
 
     #if ((MACHINE == MACH_AVR) || (MACHINE == MACH_ARM)) /* ARM is Teensy3.1 */ // <dpa> libtask set in task.h
     delay(1500);   /* hardware delay, sysclock not running yet */
