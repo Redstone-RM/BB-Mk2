@@ -103,17 +103,19 @@ Bum Biter Bot MK 2.0
 // SERIAL TRANSFER 
 #define mySerialConn Serial2  // Define the UART to use for communication with ROS2 controler.
 #include <SerialTransfer.h> // https://github.com/PowerBroker2/SerialTransfer
-SerialTransfer rxSerialTransfer; // create Rx Receive Transfer Obj
+
+SerialTransfer rxSerialTransfer; // create SerialTransfer Obj
+
 struct ctrlmsg { 
   float x;
   float z;
   char  debug[128];
 } botmsg; // create a control message struct to hold Datum Obj from ROS2 Controler > ctrlmsg >SerailTransfer "datum" >UART>botmsg.
 
-SerialTransfer txSerialTransfer; // create Tx Transmit Transfer Obj
+
 struct statmsg { 
-  float x; // Confirm current X value. Feedback 
-  float z; // Confirm current Z value. Feedback
+  float x; // Confirm current requested X value. Feedback 
+  float z; // Confirm current requested Z value. Feedback 
   int   mtr_pos_right; // right motor encoder position
   int   mtr_pos_left; // left motor encoder position
   int   mtr_speed_right;  // motor a speed
@@ -857,12 +859,21 @@ void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotat
 
 void svc_serial_conn (ASIZE delay){ // Internal UART connection Manager
   while(1){
-
-  if(rxSerialTransfer.available()){ 
-    rxSerialTransfer.rxObj(botmsg); // place the Rx Object recieved into botmsg
-   // PRINTF(botmsg.x); // For TESTING remove me later.
-   // PRINTF(botmsg.z); // For TESTING remove me later.
-  }
+    if(rxSerialTransfer.available()){ // receive what ever is there to recieve and update the global ctrlmsg
+      rxSerialTransfer.rxObj(botmsg); // place the Rx Object recieved into botmsg
+    }
+    statmsg.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
+    statmsg.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
+    statmsg.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
+    statmsg.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
+    statmsg.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
+    statmsg.mtr_speed_left  = mtr_ctl_speed_b;  // motor b speed
+    statmsg.sen_sonar_fwd   = bot_sen_sonar_fwd_ping; // forward sonar value
+    statmsg.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
+    statmsg.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
+    statmsg.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
+    strcpy (statmsg.debug, bot_sys_debug); // short logging message
+    rxSerialTransfer.sendDatum(statmsg);
   WAIT(delay);
   }
 }
