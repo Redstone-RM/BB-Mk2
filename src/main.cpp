@@ -111,7 +111,7 @@ I2CTransfer  myTransfer; // create I2C Transfer Obj
 struct ctrlmsg { 
   float x;
   float z;
-  //char  debug[1];
+  char  debug[3];
 } botmsg; 
 
 struct statmsg { 
@@ -346,7 +346,7 @@ void console_log(ASIZE delay)
     debug_msg += ("\n==== MOTORS ====\n#MOTOR\t\tCPS\t\tROT\t\tCNT\n");
     debug_msg +=  "Motor A\t\t" + String( mtr_sen_clicks_per_a * 4) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
     debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_b * 4 )  + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
-    debug_msg +=  "CTRL X:"+ String(botmsg.x) + " Z: " + String(botmsg.z) + " DeBug: " + "\n"; 
+    debug_msg +=  "CTRL X:"+ String(botmsg.x) + " Z: " + String(botmsg.z) + " DeBug: " + String(botmsg.debug) + "\n"; 
     
     PRINTF(debug_msg);
     //bot_sys_bt_conlog("Motor A\nRPM:" + String(mtr_sen_rpm_a) + "\nSPD: " + String (mtr_sen_speed_a) + "\nROT: " + String( mtr_sen_stat_a) +"\nPOS: " + String(mtr_sen_pos_a)+"\n");
