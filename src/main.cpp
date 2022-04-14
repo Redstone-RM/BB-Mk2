@@ -100,18 +100,19 @@ Bum Biter Bot MK 2.0
 #define CUSTOM_SETTINGS // You can reduce the size of compiled library by enabling only modules you want to use. First define CUSTOM_SETTINGS followed by #define INCLUDE_modulename
 #define INCLUDE_GAMEPAD_MODULE // Include Dabble Gamepad module https://thestempedia.com/docs/dabble/game-pad-module
  
-// SERIAL TRANSFER 
-#define mySerialConn Serial2  // Define the UART to use for communication with ROS2 controler.
-#include <SerialTransfer.h> // https://github.com/PowerBroker2/SerialTransfer
+// I2C Datum TRANSFER from ROS2 Controler. see https://github.com/PowerBroker2/SerialTransfer
+#include <I2CTransfer.h> 
+#define I2C_ADDR 0  // I2C Slave Address when in slave mode. IMPORTANT. SerailTransfer.h defaults addr 0 not configurable AFIAK here ATM .
+  // Begin I2C control message structs.
+I2CTransfer  myTransfer; // create I2C Transfer Obj
 
-SerialTransfer rxSerialTransfer; // create SerialTransfer Obj
-
+// create crtlmsg and statmsg struct to hold I2c Transfer "datum" Obj 
+// ROS2 Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
 struct ctrlmsg { 
   float x;
   float z;
-  char  debug[128];
-} botmsg; // create a control message struct to hold Datum Obj from ROS2 Controler > ctrlmsg >SerailTransfer "datum" >UART>botmsg.
-
+  char  debug[3];
+} botmsg; 
 
 struct statmsg { 
   float x; // Confirm current requested X value. Feedback 
@@ -225,7 +226,8 @@ scope_type_name
 
 */
 int bot_init_runlvl  = 5; // Default init level.
-char bot_sys_debug[] = ""; // string to hold debug output. For Serial or logging
+char bot_sys_debug[] = "Hello World"; // string to hold debug output. For Serial or logging
+
 String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
 bool dataflag = 0;
 
@@ -344,13 +346,13 @@ void console_log(ASIZE delay)
     debug_msg += ("\n==== MOTORS ====\n#MOTOR\t\tCPS\t\tROT\t\tCNT\n");
     debug_msg +=  "Motor A\t\t" + String( mtr_sen_clicks_per_a * 4) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
     debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_b * 4 )  + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
-    
+    debug_msg +=  "CTRL X:"+ String(botmsg.x) + " Z: " + String(botmsg.z) + " DeBug: " + String(botmsg.debug) + "\n"; 
     
     PRINTF(debug_msg);
     //bot_sys_bt_conlog("Motor A\nRPM:" + String(mtr_sen_rpm_a) + "\nSPD: " + String (mtr_sen_speed_a) + "\nROT: " + String( mtr_sen_stat_a) +"\nPOS: " + String(mtr_sen_pos_a)+"\n");
     //bot_sys_bt_conlog("Motor B\nRPM:" + String(mtr_sen_rpm_b) + "\nSPD: " + String (mtr_sen_speed_b) + "\nROT: " + String( mtr_sen_stat_b) +"\nPOS: " + String(mtr_sen_pos_b)+"\n");
  
-    }
+    } 
     
     WAIT(delay);   
   }  
@@ -432,9 +434,13 @@ void init_1_led_heartbeat(void){
      pinMode(LED_HEARTBEAT_PIN, OUTPUT); 
 }
 
-void init_1_serial_transerfer(void){
-    mySerialConn.begin(BAUDRATE);// Testing rate. we may change this to be faster.
+void I2C_callback()
+{
+  myTransfer.rxObj(botmsg);  // what to do when we get an I2C msg
+  // Serial.println("I2C Callback");
 }
+const functionPtr callbackArr[] = { I2C_callback }; // Call back function pointer array. Orig lib Demo code says "persistent allocation required"
+
 /* LVL 2 INIT Functions */ 
 
 void init_2_sonar_setup(){
@@ -612,24 +618,15 @@ int sonar_ping(int num = 0 ){  // take a sample number of pings and return round
 
     // calculate distance in CM
     distance = (duration / 2) * 0.0343; // speed of sound at sea level 20C 343 m/s  adjust for cond?
-    // send results to serial montior
-    //Serial.print ("Distance = ");
 
    if (distance >= 400 || distance <= 2 ){
       // Serial.println("Out Of Range");
       distance = 0;
-      // sum += round(distance);    
-      
    } else {
-      // Serial.println(round(distance));
-      // Serial.print(" cm\n");
-      // WAIT(1000);
       sum += round(distance); // add measurment
       cnt++; // increment ping counter that is tested against global config var int bot_sen_ping_cnt
    }
-    WAIT(1);  
-    
-
+    WAIT(1);   
   }
   int avg =  sum / cnt;
     //PRINTF(avg);
@@ -822,10 +819,8 @@ void bot_ctl_backward(int speed){
 
 void bot_ctl_backoffturn_left(int speed){
     MOTOR_WAKE;
-      // back motor b up by global val
-      mtr_ctl_b(true, speed);
-      // put motor A to idle
-      mtr_ctl_a(0, 0);
+      mtr_ctl_b(true, speed);// back motor b up by global val
+      mtr_ctl_a(0, 0);// put motor A to idle
 }
 
 void bot_ctl_backoffturn_right(int speed){
@@ -839,11 +834,8 @@ void bot_ctl_backoffturn_right(int speed){
 void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotation (ie. CW)
     MOTOR_WAKE;
     if(DEBUG){
-    //PRINTF("PIVOT TURN REQESTED ");
-    //PRINTF(rotation);
+     
     }
-    //int test = rotation;
-    //PRINTF(test);
     if (rotation) { // Positive rotation. Clock wise pivot to the right.
       // back motor A up by global val
       mtr_ctl_a(1, mtr_ctl_pivot_speed);
@@ -857,11 +849,8 @@ void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotat
     }
 }
 
-void svc_serial_conn (ASIZE delay){ // Internal UART connection Manager
+void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
   while(1){
-    if(rxSerialTransfer.available()){ // receive what ever is there to recieve and update the global ctrlmsg
-      rxSerialTransfer.rxObj(botmsg); // place the Rx Object recieved into botmsg
-    }
     statmsg.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
     statmsg.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
     statmsg.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
@@ -873,7 +862,7 @@ void svc_serial_conn (ASIZE delay){ // Internal UART connection Manager
     statmsg.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
     statmsg.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
     strcpy (statmsg.debug, bot_sys_debug); // short logging message
-    rxSerialTransfer.sendDatum(statmsg);
+    // rxSerialTransfer.sendDatum(statmsg);
   WAIT(delay);
   }
 }
@@ -1128,7 +1117,6 @@ void system_init(void)
     Serial.begin(BAUDRATE); 
     Dabble.begin(9600);  //Enter baudrate of your bluetooth module 
     init_1_led_heartbeat(); // LED heartbeat
-    init_1_serial_transerfer(); // Bot Msg Serail Connection
     init_2_sonar_setup(); // Initalize sonar
     init_3_motors_setup(); // Motor Init    
 
@@ -1153,12 +1141,19 @@ void setup()
 
 {
     system_init();
+
+    Wire.begin(0);// 
+    configST I2C_myConfig; 
+    I2C_myConfig.debug        = true;
+    I2C_myConfig.callbacks    = callbackArr;
+    I2C_myConfig.callbacksLen = sizeof(callbackArr) / sizeof(functionPtr);
+    myTransfer.begin(Wire, I2C_myConfig);
+
+
     printv = printkbuf;
 
     PRINTF("Howdy Console!\n");
-    
-    rxSerialTransfer.begin(mySerialConn);
-
+        
     #if ((MACHINE == MACH_AVR) || (MACHINE == MACH_ARM)) /* ARM is Teensy3.1 */ // <dpa> libtask set in task.h
     delay(1500);   /* hardware delay, sysclock not running yet */
     #endif
@@ -1178,7 +1173,7 @@ void setup()
     
     // Level 1 System Tasks
     
-    create_task((char *)"SERIAL",svc_serial_conn,1, MINSTACK*4); // update UART connection with ROS2 Controler.
+    create_task((char *)"I2C",svc_I2C_conn,1, MINSTACK*4); // update UART connection with ROS2 Controler.
     create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and fetching with LMX
     create_task((char *)"FLASH",flash,800,MINSTACK); // Timing part of heatbeat. kept as example of how to use semaphore setting 
     create_task((char *)"CONLOG",console_log,5000,MINSTACK*2); // Dev logging to USB Serial output
