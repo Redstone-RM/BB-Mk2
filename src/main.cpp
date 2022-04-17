@@ -78,6 +78,8 @@ Bum Biter Bot MK 2.0
 #define VERSION "Bum Biter MK-2.1.1"
 #define DEBUG true
 
+#include "botmsg.h" // botmsg code for Communications 
+
 /* -------------------------------------- */
 #include <Arduino.h> // Only Needed for PlatformIO.
 #include <util/atomic.h> // Using ATOMIC_BLOCK macro for wheel encoder reading of volitile ints.
@@ -108,25 +110,12 @@ I2CTransfer  myTransfer; // create I2C Transfer Obj
 
 // create crtlmsg and statmsg struct to hold I2c Transfer "datum" Obj 
 // ROS2 Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
+
 struct ctrlmsg { 
   float x;
   float z;
   char  debug[8];
 } botmsg; 
-
-struct statmsg { 
-  float x; // Confirm current requested X value. Feedback 
-  float z; // Confirm current requested Z value. Feedback 
-  int   mtr_pos_right; // right motor encoder position
-  int   mtr_pos_left; // left motor encoder position
-  int   mtr_speed_right;  // motor a speed
-  int   mtr_speed_left;  // motor b speed
-  int   sen_sonar_fwd; // forward sonar value
-  int   sen_sonar_rear; // rear sonar value
-  int   sen_ir_right; // right IR value
-  int   sen_ir_left; // left IR value
-  char  debug[8]; // short logging message
-} statmsg; // create a status message struct
 
 
 
@@ -850,19 +839,23 @@ void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotat
 
 void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
   while(1){
-    statmsg.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
-    statmsg.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
-    statmsg.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
-    statmsg.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
-    statmsg.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
-    statmsg.mtr_speed_left  = mtr_ctl_speed_b;  // motor b speed
-    statmsg.sen_sonar_fwd   = bot_sen_sonar_fwd_ping; // forward sonar value
-    statmsg.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
-    statmsg.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
-    statmsg.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
-    strcpy (statmsg.debug, "LOG"); // short logging message
-    // rxSerialTransfer.sendDatum(statmsg);
-  WAIT(delay);
+    txData.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
+    txData.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
+    txData.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
+    txData.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
+    txData.mtr_speed_left  = mtr_ctl_speed_b;  // motor b speed
+    txData.sen_sonar_fwd   = bot_sen_sonar_fwd_ping; // forward sonar value
+    txData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
+    txData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
+    txData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
+    txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
+    strcpy (txData.debug, "INFO"); // short logging message
+
+    botmsg.x =  rxData.x; 
+    botmsg.z =  rxData.z;
+    strcpy(botmsg.debug,rxData.debug);
+
+    WAIT(delay);
   }
 }
 
@@ -1140,6 +1133,14 @@ void setup()
 
 {
     system_init();
+// I2C TEst
+        // set up I2C
+    Wire.begin(I2C_ADDR); // join i2c bus
+    Wire.onReceive(receiveEvent); // register function to be called when a message arrives
+    Wire.onRequest(requestEvent); // register function to be called when a request arrives
+
+
+/* Serial Transfer Library // backup working code
 
     Wire.begin(I2C_ADDR);// 
     configST I2C_myConfig; 
@@ -1147,7 +1148,7 @@ void setup()
     I2C_myConfig.callbacks    = callbackArr;
     I2C_myConfig.callbacksLen = sizeof(callbackArr) / sizeof(functionPtr);
     myTransfer.begin(Wire, I2C_myConfig);
-
+*/
 
     printv = printkbuf;
 
