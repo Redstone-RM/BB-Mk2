@@ -102,7 +102,7 @@ Bum Biter Bot MK 2.0
  
 // I2C Datum TRANSFER from ROS2 Controler. see https://github.com/PowerBroker2/SerialTransfer
 #include <I2CTransfer.h> 
-#define I2C_ADDR 0  // I2C Slave Address when in slave mode. IMPORTANT. SerailTransfer.h defaults addr 0 not configurable AFIAK here ATM .
+#define I2C_ADDR 9  // I2C Slave Address when in slave mode. IMPORTANT. SerailTransfer.h defaults addr 0 not configurable AFIAK here ATM .
   // Begin I2C control message structs.
 I2CTransfer  myTransfer; // create I2C Transfer Obj
 
@@ -111,7 +111,7 @@ I2CTransfer  myTransfer; // create I2C Transfer Obj
 struct ctrlmsg { 
   float x;
   float z;
-  char  debug[3];
+  char  debug[8];
 } botmsg; 
 
 struct statmsg { 
@@ -125,7 +125,7 @@ struct statmsg {
   int   sen_sonar_rear; // rear sonar value
   int   sen_ir_right; // right IR value
   int   sen_ir_left; // left IR value
-  char  debug[128]; // short logging message
+  char  debug[8]; // short logging message
 } statmsg; // create a status message struct
 
 
@@ -417,7 +417,6 @@ float clip(float value, float min, float max ){ // dpa inspired cliping function
 /* 
 -----------------------------------------  INIT Section ------------------------------------------
  TBD maybe? - Emulate a sysV type init function system. 
-
 // init functions are named init_runlevel_class_name
 // runlevels 
 // 0 - Reserved        - unused currently
@@ -861,7 +860,7 @@ void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
     statmsg.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
     statmsg.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
     statmsg.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
-    strcpy (statmsg.debug, bot_sys_debug); // short logging message
+    strcpy (statmsg.debug, "LOG"); // short logging message
     // rxSerialTransfer.sendDatum(statmsg);
   WAIT(delay);
   }
@@ -1142,7 +1141,7 @@ void setup()
 {
     system_init();
 
-    Wire.begin(0);// 
+    Wire.begin(I2C_ADDR);// 
     configST I2C_myConfig; 
     I2C_myConfig.debug        = true;
     I2C_myConfig.callbacks    = callbackArr;
