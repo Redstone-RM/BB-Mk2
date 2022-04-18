@@ -22,7 +22,7 @@
 
 // #define MACHINE MACH_M68K
 // #define MACHINE MACH_ARM
-#define MACHINE MACH_AVR
+#define MACHINE MACH_AVR 
 
 /* ------------------------------------------------------------------- */
 /* Define size of timers and task arguments */

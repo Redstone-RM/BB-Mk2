@@ -11,6 +11,8 @@
 #define BAUDRATE 57600  // LMX 
 #define PRINTF Serial.println // LMX 
 #define SPRINTF sprintf // LMX 
+#define MACHINE MACH_AVR // this is currently set in task.h so this does nothing but the functionalty needs to be migrated.
+
 
 /* ------------ <dpa> -------------------------- */
 /* Count idle cycles per second dpa original function */ 

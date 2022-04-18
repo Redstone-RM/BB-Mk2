@@ -462,9 +462,9 @@ void system_init(void)
 }
 
 
-/*-----------------------------------------  MAIN ------------------------------------------
-
-------------------------------------------------------------------------------------------*/
+/*####################################################################
+ MAIN
+ ###################################################################### */
 
 void setup()
 
@@ -488,27 +488,26 @@ void setup()
 */
 
     printv = printkbuf;
-
-    PRINTF("Howdy Console!\n");
-        
+    PRINTF("Howdy Console!\n");       
     #if ((MACHINE == MACH_AVR) || (MACHINE == MACH_ARM)) /* ARM is Teensy3.1 */ // <dpa> libtask set in task.h
     delay(1500);   /* hardware delay, sysclock not running yet */
     #endif
-
     pid_count = 0; current = 0;
 
 
-   // create_task((char *)"MTRTST",svc_motor_test,5000, MINSTACK );   
-   
-    /************** TASKS *******************/
-    // EX 2000ms:  create_task((char *)"TSKNAM",function_name,2000, MINSTACK );
-    
-    // LMX Tasks
+/*####################################################################
+    TASKS
+    example pass a 5000 Msec delay to be used in callback function "cb_funct"
+    create_task((char *)"TSKNAM",cb_funct, 5000, MINSTACK );
+
+###################################################################### */
+
+    // LMX System Tasks
     create_task((char *)"IDLE",cpu_idle,0,MINSTACK);
     create_task((char *)"STATS",stats_task,15000,MINSTACK*4);
     create_task((char *)"SIGNON",signon,1,MINSTACK*4);
     
-    // Level 1 System Tasks
+    // Level 1 Bot System Tasks
     
     create_task((char *)"I2C",svc_I2C_conn,1, MINSTACK*4); // update UART connection with ROS2 Controler.
     create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and fetching with LMX
@@ -519,7 +518,7 @@ void setup()
     create_task((char *)"ENCDR",svc_encoders,1, MINSTACK ); // Motor Encoder Reading Service. Delay is ignored.
     create_task((char *)"PING",svc_ping,10, MINSTACK*2); // IR and Sonar Ping service
     // create_task((char *)"MENTOR",bot_svc_bt_pin_monitor,10, MINSTACK); // Pin Monitor. ???not wrking 8()
-    
+    // create_task((char *)"MTRTST",svc_motor_test,5000, MINSTACK );    
 
     // Level 3 Controls
     create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth User Input Controler
