@@ -9,10 +9,21 @@
 /*############################################################################## */
 
 /*######################## </libtask LMX dpa> ######################################### */
+
 #include <stdio.h> // LMX 
 #include <task.h> // LMX
 #include <log.h> // LMX
 #include <sysclock.h> // LMX
+/* 
+Choose one of the below:  
+#define WAIT(d)  { d *= 10; cnt = 0; while (cnt++ < d) defer(); }
+#define WAIT(d)  { msleep(d); }
+#define WAIT(d)  { wake_after(d); }
+*/
+#define WAIT(d)  { wake_after(d); }
+#define BAUDRATE 57600
+#define PRINTF Serial.println
+#define SPRINTF sprintf
 
 /* --------------- System ----------------------- */
 #include <Arduino.h> 
@@ -42,7 +53,6 @@ struct ctrlmsg {
 void printkbuf(char *s) {  // dpa
    PRINTF(s);
 }
-
 
 /* 
 STATE VARIABLES 

@@ -33,7 +33,6 @@ bool bot_sen_ir_rear_ping = 0 ; // Rear Digital IR
 #define LED1_ON  digitalWrite(LED_HEARTBEAT_PIN, HIGH) // onboard LED used for heartbeat.
 #define LED1_OFF digitalWrite(LED_HEARTBEAT_PIN, LOW)  // onboard LED used for heartbeat.
 
-
 void init_2_sonar_setup(){
     pinMode(trigPinFwd, OUTPUT);
     pinMode(echoPinFwd, INPUT);
@@ -41,7 +40,4 @@ void init_2_sonar_setup(){
     pinMode(trigPinRear, OUTPUT);
     pinMode(echoPinRear, INPUT);
 }
-
-
-
 
