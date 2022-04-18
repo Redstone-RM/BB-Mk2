@@ -1,37 +1,21 @@
-## Welcome to GitHub Pages
+# BumBiter Mk 2
+-BB Mk 2
 
-You can use the [editor on GitHub](https://github.com/Redstone-RM/BB-Mk2/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
+### Acknowledgements. 
+At the core of this build is a task scheduler called libtask which was shamelessly stolen from
+"Test of LMX multi-tasking on ARDUINO" by David P. Anderson https://github.com/dprg/lmx
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+### The Name 
+The nickname for the bot was given by my daughter Alyssa who said she wanted a robot that would patrol the house and bite bad guys in the bum but also be fun and bring you stuff. 
 
-### Markdown
+The initial build, the ***BumBiter Mk1***, was initially built on Arduino Uno (later Nano) hardware. Lack of multitasking lead to the search that eventually rested on libtask/LMX and I upgraded to the Arduino Mega 2560 because that's I already had.
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+This represents a WORK IN PROGRESS and a fun learning project.
 
-```markdown
-Syntax highlighted code block
+**Current status** is that Tele-operation is possible with the Dabble Bluetooth game pad app. Bluetooth terminal commands work as well so making something respond to a voice typed command could be simple. however that has not been done.
 
-# Header 1
-## Header 2
-### Header 3
+ROS2 Integration is being developed by having this hardware exchange messages with a WiFi enabled board running micro-ROS. In this case an Arduino Nano RP2040 Connect.
 
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
-```
-
-For more details see [Basic writing and formatting syntax](https://docs.github.com/en/github/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/Redstone-RM/BB-Mk2/settings/pages). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://support.github.com/contact) and we’ll help you sort it out.
+The griper arm is not assembled.
+  
+Many more enhancements are in the dream pipe.
