@@ -1,84 +1,10 @@
 /* -------------------------------------- */
-/* 
-Bum Biter Bot MK 2.0
-*   09 Apr 2022 RM - Installed SerialTranserfer
-                   - Code and comments clean up. 
-                   - Migrated code to github.
-                   - changed default serial port to ttyACM1 in platformio.ini
-
-*   15 Mar 2022 RM - Implemented new encoder counter functions to increse the resoultion of the counts. I'm getting 4 times more! 8D
-                      |-> Made new backup before began. 
-                      |-> https://github.com/vinay-lanka/navbot_hardware/blob/master/encodertest/encodertest.ino
-                    
-*   13 Mar 2022 RM - Continued Troubleshooting of new shield. Success. 
-*   11 Mar 2022 RM - changing PINS to accomodate for new board shield configuration 
-
-*   06 Mar 2022 RM - Add ability Turn PID on and off with controler Select and Start for now.
-                      - Begin setup BlueTooth Terminal mobile for feedback with pid tuning etc.
-
-*   05 Mar 2022 RM - Added clip limiting function and installed PID libaray.
-                    - working on PID implementation
-
-*   04 Mar 2022 RM - Motor function changes
-                      -> the 3 functions with control of the motor set the global variables for rotation. 
-                   -Fixed up the motor debug info output.
-                   
- *  03 Mar 2022 RM - Moved wheel encoder reading to a service used an atomic_block for less erratic results from reading the interrupt driven variables.
-                      - Working on PID control.
-                        - Got RPM count working. It could probably be better.
-                        - Added distance and speed calc using wheel measurments                        
-
- *  02 Mar 2022 RM - Added wheel encoder counters and related functions.
-                   - Noticed DEBUG printing to conlog was getting close to maxstack. increased it to 128 (maxstack*2 )
- *  28 Feb 2022 RM - Adding Second array of Rear facing sensors. Sharp Digital IR 20CM  and HC-SR04. Pins. 
-                   - Moved analog IR sensors to left and right.
-                   - Expanded power distribution board to accomodate more sensors.
-                   
- *  27 Feb 2022 RM - Adding HM-10 V3 BT 4.0 on Serial3 using Dabble BT library
- *  24 Feb 2022 RM - Adding Analog sharp IR sensor to Analog pin 0. note the alias for A0 is PIN_A0 and not simple 
- *
- *  17 -23 Feb 2022 RM  -  created ping and cruise/drive tasks with associated functions plus a terrible first POC avoid function.
- *  
- *  15 Feb 2022 RM Created. 
- *      - Acknowledgements. This was code is shamelssly stolen from "Test of LMX multi-tasking on ARDUINO" by David P. Anderson https://github.com/dprg/lmx
- *        The nickname was given by my daughter Alyssa who said she wanted a robot that would patrol the house and bite bad guys in the bum but also be fun and bring you stuff.
- *      Hardware: 
- *            - Arduino Mega 2560. 
- *            - TB6612fng Motor Driver with 2x Encoder TT motors (wired in a fliped/mirrored configuration because why suffer?.)
- *            - Custom built power distriubtion board.
- *            - HC-SRO4 Ultrasonic distance Sensor fwd and rear
- *            - Sharp GP2Y0A41SK0F IR distance sensor 4 - 30CM  - x 2 located left and right forward of wheels. 
- *            - Sharp GP20D21 21CM Digital IR Distance sensor mounted fwd as a backup to Ultrasonic as some materials and situations are blind to one or ther other. 
- *            - Not yet moved from mk1 is the Passive Piezo speaker for 8bit jams
- *            - HM-10 V3 BT 4.0 on Serial3   
-
- *     Software:
- *            - libtask LMX from D.P. Anderson as a scheduler 
- *            - Stole this IR sensor lib https://github.com/qub1750ul/Arduino_SharpIR 
- *            - Currently Porting from Mk1 hardware. Unamed custom written TB6612fng Motor Driver functions that should probably move to a inc or lib later.
- *            - Blue Tooth interface using libraries from Dabble https://thestempedia.com/docs/dabble/game-pad-module/
- *            - SerialTransfer https://github.com/PowerBroker2/SerialTransfer
- *          
- * 
- *  TO-DO List: 
- *            - Convert all dependencies to PlatformIO libdeps.
- *            - Move documentation and activit log out of source code.
- *            - Add/fix ability to send some console DEBUG log info back over serial BT console.
- *            - Add visual feedback RGB LEDs
- *            - Add Speaker. 
- *            - BUG. When Arduino reboots BT connection is problematic.
- *              |-> Connect the appropriate reset ping to the BT module and have it restart when the sketch does.
- *                |-->Make sure above is run time configurable option ALSO a tirggerable event.
- *            - BUG. Time out functioning required for HC-SRO4. Default of 1000ms causes issues if the conection faults.  
- *  
- */
-/* -------------------------------------- */
-
-/* -------------------------------------- */
-#define VERSION "Bum Biter MK-2.1.1"
+#define VERSION "Bum Biter MK-2.2.0"
 #define DEBUG true
 
 #include "botmsg.h" // botmsg code for Communications 
+#include "mtrctl.h" // motor control functions 
+#include "sensors.h" // sensor related code
 
 /* -------------------------------------- */
 #include <Arduino.h> // Only Needed for PlatformIO.
@@ -95,7 +21,9 @@ Bum Biter Bot MK 2.0
 
 // Sensors
 #include <SharpIR.h> // IR Distance Sensors
-#include <PID_v1.h> // PID https://playground.arduino.cc/Code/PIDLibrary/
+
+//#include <PID_v1.h> // PID https://playground.arduino.cc/Code/PIDLibrary/  https://github.com/br3ttb/Arduino-PID-Library/
+
 
 // BlueTooth Config
 #include <Dabble.h> // Dabble Bluetooth Contoller. https://thestempedia.com/docs/dabble
@@ -132,72 +60,13 @@ void printkbuf(char *s) {  // dpa
 
 /* -------------Definitions ------------------------- */
 
-/*   Pin Definitions   */
 
-#define LED_HEARTBEAT_PIN 13
-
-/*  MOTOR CONTROL  
-      Motor setup notes
-      MOTOR A = RIGHT
-      MOTOR B = LEFT
-      FWD = HIGH/LOW
-      REV = LOW/HIGH
-      BRAKE = HIGH/HIGH
-*/ 
-// motor A
-#define MTRA_ENCA 2 // orange Motor A encoder output A must be on interrupt pin.
-#define MTRA_ENCB 3 // red Motor A encoder output on B on an interrupt pin.
-#define MTRA_CLICKS_PER 540 // encoder clicks per bot wheel rotation.
-#define MTRA_WHEELD 60.3 // wheel D in mm
-
-
-// motor B
-#define MTRB_ENCA 19 // red. Motor B encoder output A must be on interrupt pin. // remember the motors are flipped here and in polarity. Affected encoder counting rotation.
-#define MTRB_ENCB 18 // orange.  Motor B encoder output B must be on interrupt pin. // remember the motors are flipped here and in polarity.
-#define MTRB_CLICKS_PER  540// encoder clicks per bot wheel rotation.
-#define MTRB_WHEELD 60.3 // wheel D in mm
-
-// These Interface with Motor Driver H-Bridge.
-// keep in mind the PWM defines must be on PWM pins
-              // new pin#    // Old pin#
-#define MOTOR_BIN2 6  // 34
-#define MOTOR_BIN1 7  // 36
-#define MOTOR_STBY 8  // 38
-#define MOTOR_AIN1 9  // 40                                       
-#define MOTOR_AIN2 10 // 42
-#define MOTOR_PWMB 5  // 44 // PWM pin
-#define MOTOR_PWMA 11 // 46 // PWM Pin 
-
-
-// sound control
-// #define BEEP xx // hooked to passive piezo buzzer.
-
-// SENSONR PINS 
-  //  HC-SR04 Ultra-sonic Distance Sensors
-      // FWD 
-#define trigPinFwd 46// yellow 
-#define echoPinFwd 48 // green. Note that 46 is also PWM capable. 
-    // REAR
-#define trigPinRear 26 // yellow
-#define echoPinRear 28 // green
-
-  // Sharp Analog IR sensor 4-30CM  gp2y0a41sk0f 
-#define IRPin_1  PIN_A0 // right
-#define IRPin_2  PIN_A1 // left
-#define IR_SENSOR_1 GP2Y0A41SK0F // Model of Sharp IR distance sensor for FWD IR
-#define IR_SENSOR_2 GP2Y0A41SK0F // Model of Sharp IR distance sensor for FWD IR
-  
-// Sharp Digital IR distance Sensors 2YD021 - Disabled Mar 12 2022 RM.
-// #define IRPin_FWD 4 
-// #define IRPin_Rear 5
 
 /* Layer 1 function alias definitions    */
 //  heartbeat LED .
 #define LED1_ON  digitalWrite(LED_HEARTBEAT_PIN, HIGH) // onboard LED used for heartbeat.
 #define LED1_OFF digitalWrite(LED_HEARTBEAT_PIN, LOW)  // onboard LED used for heartbeat.
 
-// Wake up motor driver from low power standby
-#define MOTOR_WAKE digitalWrite(MOTOR_STBY, HIGH) 
 
 /* 
 STATE VARIABLES 
@@ -220,32 +89,6 @@ char bot_sys_debug[] = "Hello World"; // string to hold debug output. For Serial
 String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
 bool dataflag = 0;
 
-/********** MOTOR GLOBALS **********/
-// Motor CONTORL
-int mtr_ctl_speed = 150; // CFG > default drive speed. tweak these as req either here or runtime
-int mtr_ctl_pivot_speed = 150; // CFG > default pivot turn speed. 
-int mtr_ctl_speed_a = 0;  // to set motor a speed
-int mtr_ctl_speed_b = 0;  // set motor b speed
-
-// Motor Virtual Sensors
-volatile long mtr_cal_a_encoder0Pos = 0;    // MTR A encoder 
-volatile long mtr_cal_b_encoder1Pos = 0;    // MTR B encoder 
-
-int mtr_sen_pos_a = 0; // SAFE readable versions of above motor postional counts.
-int mtr_sen_pos_b = 0; // SAFE readable versions of above motor postional counts.
-
-double mtr_sen_rpm_a = 0.00; // Holds Rough RPM calc per motor
-double mtr_sen_rpm_b = 0.00; // Holds Rough RPM calc per motor
-
-double mtr_sen_speed_a =  0.00; // Estimated Ideal Speed. Wheel Circumference * RPM expressed in Meters per minute MPM
-double mtr_sen_speed_b =  0.00; // Estimated Ideal Speed. Wheel Circumference * RPM expressed in Meters per minute MPM
-
-int mtr_sen_clicks_per_a = 0, mtr_sen_clicks_per_b =0;
-
-int mtr_sen_stat_a = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
-int mtr_sen_stat_b = 0; // Default Stopped = 0 rotation  (0 = stopped, 1 = fwd, -1 = rev )
-
-
 // Motor Command PID Control
 bool bot_ctl_Motor_PID_Enable = 0;
 
@@ -256,9 +99,9 @@ double mtr_cmd_b_Input, mtr_cmd_b_Output, mtr_cmd_b_Setpoint;
 double aKp=0.35, aKi=10, aKd= 0.1;
 double bKp=0.35, bKi=10, bKd= 0.1;
 
- PID mtr_cmd_a_PID(&mtr_cmd_a_Input, &mtr_cmd_a_Output, &mtr_cmd_a_Setpoint,aKp,aKi,aKd,P_ON_M, DIRECT); // Motor A PID Object
+// PID mtr_cmd_a_PID(&mtr_cmd_a_Input, &mtr_cmd_a_Output, &mtr_cmd_a_Setpoint,aKp,aKi,aKd,P_ON_M, DIRECT); // Motor A PID Object
     // mtr_cmd_a_PID.SetSampleTime(100); // match sample time for RPM
- PID mtr_cmd_b_PID(&mtr_cmd_b_Input, &mtr_cmd_b_Output, &mtr_cmd_b_Setpoint,bKp,bKi,bKd,P_ON_M, DIRECT); // Motor B PID Object
+// PID mtr_cmd_b_PID(&mtr_cmd_b_Input, &mtr_cmd_b_Output, &mtr_cmd_b_Setpoint,bKp,bKi,bKd,P_ON_M, DIRECT); // Motor B PID Object
     //mtr_cmd_b_PID.SetSampleTime(100); // 10Hz sample time to match RPM calc.
 
 
@@ -440,140 +283,6 @@ void init_2_sonar_setup(){
 }
 /* LVL 3 INIT Functions */
 
-void doEncoderA(){  // ************** Encoder MTR A *********************
-
-  // look for a low-to-high on channel A
-  if (digitalRead( MTRA_ENCA) == HIGH) { 
-    // check channel B to see which way encoder is turning
-    if (digitalRead( MTRA_ENCB) == LOW) {  
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;         // CCW
-    } 
-    else {
-      
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;         // CW     
-    }
-  }
-  else   // must be a high-to-low edge on channel A                                       
-  { 
-    // check channel B to see which way encoder is turning  
-    if (digitalRead(MTRA_ENCB) == HIGH) {   
-      
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;          // CCW
-    } 
-    else {
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;          // CW
-    }
-  }
- 
-}
-
-void doEncoderB(){  
-
-  // look for a low-to-high on channel B
-  if (digitalRead(MTRA_ENCB) == HIGH) {   
-   // check channel A to see which way encoder is turning
-    if (digitalRead(MTRA_ENCA) == HIGH) {  
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;         // CCW
-    } 
-    else {
-      
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;         // CW
-    }
-  }
-  // Look for a high-to-low on channel B
-  else { 
-    // check channel B to see which way encoder is turning  
-    if (digitalRead(MTRA_ENCA) == LOW) {   
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos - 1;          // CCW
-    } 
-    else {
-      mtr_cal_a_encoder0Pos = mtr_cal_a_encoder0Pos + 1;          // CW
-      
-    }
-  }
-  
-}
-
-void doEncoderC(){  // ************** Encoder MTR B *********************
-
-  // look for a low-to-high on channel A
-  if (digitalRead(MTRB_ENCA) == HIGH) { 
-    // check channel B to see which way encoder is turning
-    if (digitalRead(MTRB_ENCB) == LOW) {  
-       mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;         // CW
-    } 
-    else {
-      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;         // CCW
-    }
-  }
-  else   // must be a high-to-low edge on channel A                                       
-  { 
-    // check channel B to see which way encoder is turning  
-    if (digitalRead(MTRB_ENCB) == HIGH) {   
-      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;          // CW
-    } 
-    else {
-      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;          // CCW
-    }
-  }
- 
-}
-
-void doEncoderD(){  
-
-  // look for a low-to-high on channel B
-  if (digitalRead(MTRB_ENCB) == HIGH) {   
-   // check channel A to see which way encoder is turning
-    if (digitalRead(MTRB_ENCA) == HIGH) {  
-      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;         // CW
-    } 
-    else {
-      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;         // CCW
-    }
-  }
-  // Look for a high-to-low on channel B
-  else { 
-    // check channel B to see which way encoder is turning  
-    if (digitalRead(MTRB_ENCA) == LOW) {   
-      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos - 1;          // CW
-    } 
-    else {
-      mtr_cal_b_encoder1Pos = mtr_cal_b_encoder1Pos + 1;          // CCW
-    }
-  }
-  
-
-}
-
-void init_3_motors_setup() {
-  // H-Bridge
-  pinMode(MOTOR_STBY, OUTPUT); 
-  pinMode(MOTOR_AIN1, OUTPUT);
-  pinMode(MOTOR_AIN2, OUTPUT);
-  pinMode(MOTOR_PWMA, OUTPUT); 
-  pinMode(MOTOR_BIN1, OUTPUT);
-  pinMode(MOTOR_BIN2, OUTPUT);
-  pinMode(MOTOR_PWMB, OUTPUT);
-  
-  // Encoders must be Interrupt capable pins. ex. Mega 2560 2,3, 18,19
-  pinMode(MTRA_ENCA, INPUT); 
-  pinMode(MTRA_ENCB, INPUT); 
-  pinMode(MTRB_ENCA, INPUT);  
-  pinMode(MTRB_ENCB, INPUT);
-  
-  attachInterrupt(digitalPinToInterrupt(MTRA_ENCA), doEncoderA, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(MTRA_ENCB ), doEncoderB, CHANGE); 
-
-  attachInterrupt(digitalPinToInterrupt(MTRB_ENCA), doEncoderC, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(MTRB_ENCB), doEncoderD, CHANGE); 
-
-  // Enable Motor CMD PID
-  mtr_cmd_b_PID.SetMode(AUTOMATIC);
-  mtr_cmd_a_PID.SetMode(AUTOMATIC);
-
-  if (DEBUG){PRINTF("<INIT>\tinit_3_motors_setup"); } 
-  
-}
 
 int sonar_ping(int num = 0 ){  // take a sample number of pings and return rounded avg in CM. Sum adds 1cm to reserve 0 as an error situation. since this is only used as bumper and not measuerment we dont care much atm.
     float duration = 0, distance; 
@@ -629,213 +338,7 @@ void ir_ping(){
 }
 /* Level 5 Control Functions */
 
-void mtr_ctl_a(bool rev = false, int speed = 0 ) {
-  MOTOR_WAKE;
-  if (rev )
-  {
-    // reverse
-      digitalWrite(MOTOR_AIN1, LOW);
-      digitalWrite(MOTOR_AIN2, HIGH);
-      analogWrite(MOTOR_PWMA, speed);
-      mtr_sen_stat_a = -1;
-  } else{ // FWD mtr A
-      digitalWrite(MOTOR_AIN1, HIGH);
-      digitalWrite(MOTOR_AIN2, LOW);
-      analogWrite(MOTOR_PWMA, speed);
-      mtr_sen_stat_a = 1;
-  }
-}
 
-void mtr_ctl_b(bool rev = false, int speed = 0 ) {
-  MOTOR_WAKE;
-  if (rev)
-  {
-    // reverse
-      digitalWrite(MOTOR_BIN1, LOW);
-      digitalWrite(MOTOR_BIN2, HIGH);
-      analogWrite(MOTOR_PWMB, speed);
-      mtr_sen_stat_b = -1;
-  } else{ // FWD mtr B
-      digitalWrite(MOTOR_BIN1, HIGH);
-      digitalWrite(MOTOR_BIN2, LOW);
-      analogWrite(MOTOR_PWMB, speed);
-      mtr_sen_stat_b = 1;
-  }
-}
-
-void mtr_cmd_a(int speed){
-  MOTOR_WAKE;
-  if (speed == 0){
-    analogWrite(MOTOR_PWMA, speed);
-    digitalWrite(MOTOR_AIN1, LOW);
-    digitalWrite(MOTOR_AIN2, LOW);
-    mtr_sen_stat_a = 0;
-    return;
-  }
-
-  if (speed < 0 )
-  {
-    // reverse
-      digitalWrite(MOTOR_AIN1, LOW);
-      digitalWrite(MOTOR_AIN2, HIGH);
-      analogWrite(MOTOR_PWMA, speed);
-      mtr_sen_stat_a = -1;
-  } else 
-  { // FWD mtr A
-      digitalWrite(MOTOR_AIN1, HIGH);
-      digitalWrite(MOTOR_AIN2, LOW);
-      analogWrite(MOTOR_PWMA, speed);
-      mtr_sen_stat_a = 1;
-  }
-
-}
-
-void mtr_cmd_b(int speed){
-  MOTOR_WAKE;
-    if (speed == 0){
-    analogWrite(MOTOR_PWMB, speed);
-    digitalWrite(MOTOR_BIN1, LOW);
-    digitalWrite(MOTOR_BIN2, LOW);
-    mtr_sen_stat_b = 0;
-    return;
-  }
-
-  if (speed < 0)
-  {
-    // reverse
-      digitalWrite(MOTOR_BIN1, LOW);
-      digitalWrite(MOTOR_BIN2, HIGH);
-      analogWrite(MOTOR_PWMB, speed);
-      mtr_sen_stat_b = -1;
-  } else{ // FWD mtr B
-      digitalWrite(MOTOR_BIN1, HIGH);
-      digitalWrite(MOTOR_BIN2, LOW);
-      analogWrite(MOTOR_PWMB, speed);
-      mtr_sen_stat_b = 1;
-  }
-
-}
-
-void bot_motor_command(){
-  // !!!THIS IS BROEKN!!!  :(  Scrap this maybe.
-    return;
-
-    // Calc right and left motor inputs based on global  Velocity and rotation factors
-    int left_mtr = bot_ctl_velocity + bot_ctl_rotation; 
-    int right_mtr = bot_ctl_velocity - bot_ctl_rotation;
-    
-    mtr_cmd_a_Input = map((mtr_sen_clicks_per_a * mtr_sen_stat_a) ,1,90,1,100); // map clicks per 250msec as percentage 330 cps = MAX  = 100  
-    mtr_cmd_b_Input = map((mtr_sen_clicks_per_b * mtr_sen_stat_b ),1,90,1,100); // map clicks per 250msec as percentage 330 cps = MAX  = 100  
-
-    mtr_cmd_b_Setpoint = clip(left_mtr,-100,100);
-    mtr_cmd_a_Setpoint = clip(right_mtr,-100,100);
-    
-    // compute each motor PID 
-    mtr_cmd_a_PID.Compute();
-    mtr_cmd_b_PID.Compute();
-      
-    mtr_cmd_a( (right_mtr/abs(right_mtr) * mtr_cmd_a_Output)); // send +/-  mtr_cmd_a_Output for rotation
-//    PRINTF((right_mtr/abs(right_mtr) * mtr_cmd_a_Output));
-    mtr_cmd_b( (left_mtr/abs(left_mtr) * mtr_cmd_b_Output));  
-//    PRINTF((left_mtr/abs(left_mtr) * mtr_cmd_b_Output));
-
-}
-
-void stop() {
-  MOTOR_WAKE;
-  //Aye Capt! FULL STOP!
-  // Brakes //
-   // Work on migrating this to a decellerate funct in future.
-
-  // bot_ctl_velocity = 0; // Set global bot velocity factor to 0.
-  // bot_ctl_rotation = 0; ;// Set global rotation factor to FALSE
-  // mtr_cmd_a(0);
-  // mtr_cmd_b(0);
-/*
-  mtr_ctl_a(0,0); // set motors to zero
-  mtr_sen_stat_a = 0;
-
-  mtr_ctl_b(0,0);
-   mtr_sen_stat_b = 0;
-*/
-   /*
-   digitalWrite(MOTOR_AIN1, LOW);
-   digitalWrite(MOTOR_AIN2, LOW);
-   analogWrite(MOTOR_PWMA,0);
-   
-   digitalWrite(MOTOR_BIN1, LOW);
-   digitalWrite(MOTOR_BIN2, LOW);
-   analogWrite(MOTOR_PWMB,0);  
-*/
-  mtr_ctl_a(0,0); // set motors to zero
-  mtr_sen_stat_a = 0;
-
-  mtr_ctl_b(0,0);
-  mtr_sen_stat_b = 0;
-
-  WAIT(10);
-  digitalWrite(MOTOR_AIN1, LOW);
-  digitalWrite(MOTOR_AIN2, LOW);
-  analogWrite(MOTOR_PWMA,0);
-   
-  digitalWrite(MOTOR_BIN1, LOW);
-  digitalWrite(MOTOR_BIN2, LOW);
-  analogWrite(MOTOR_PWMB,0); 
-
-   //WAIT(1);
-}
-
-void bot_ctl_forward(int speed){
-  MOTOR_WAKE;
-  mtr_ctl_speed_a = mtr_ctl_speed ;
-  mtr_ctl_a(false, mtr_ctl_speed_a);
-
-  mtr_ctl_speed_b = mtr_ctl_speed ;
-  mtr_ctl_b(false, mtr_ctl_speed_b);
-
-
-}
-
-void bot_ctl_backward(int speed){
-  MOTOR_WAKE;
-  mtr_ctl_speed_a = mtr_ctl_speed ;
-  mtr_ctl_a(true, mtr_ctl_speed_a);
-  
-  mtr_ctl_speed_b = mtr_ctl_speed ;
-  mtr_ctl_b(true, mtr_ctl_speed_b);
-}
-
-void bot_ctl_backoffturn_left(int speed){
-    MOTOR_WAKE;
-      mtr_ctl_b(true, speed);// back motor b up by global val
-      mtr_ctl_a(0, 0);// put motor A to idle
-}
-
-void bot_ctl_backoffturn_right(int speed){
-    MOTOR_WAKE;
-      // back motor A up by global val
-      mtr_ctl_a(true, speed);
-      // put motor B to idle
-      mtr_ctl_b(0,0);
-}
-
-void bot_ctl_pivot( bool rotation){ // 0 = neg rotation (ie. CCW)  1 = pos rotation (ie. CW)
-    MOTOR_WAKE;
-    if(DEBUG){
-     
-    }
-    if (rotation) { // Positive rotation. Clock wise pivot to the right.
-      // back motor A up by global val
-      mtr_ctl_a(1, mtr_ctl_pivot_speed);
-      // fwd B
-      mtr_ctl_b(0, mtr_ctl_pivot_speed);          
-    } else {
-       // FWD motor A up by global val
-      mtr_ctl_a(0, mtr_ctl_pivot_speed);
-      // BACK  MTR B
-      mtr_ctl_b(1, mtr_ctl_pivot_speed);
-    }
-}
 
 void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
   while(1){
@@ -873,7 +376,7 @@ void svc_ping( ASIZE delay){ // PING service function.
   }  
 }
 
-void motor_test (ASIZE delay)
+void svc_motor_test (ASIZE delay)
 
 {
   while (1)
@@ -972,23 +475,6 @@ void bot_svc_bt_pin_monitor(ASIZE delay){
   
 }
 
-void bot_motor_cmd_svc ( ASIZE delay){ // Motor Command Service Function
-  while (1)
-  {
-    // DISABLING THIS PID FOR NOW DUE TO "Hardware Failure. Mar 07"
-    bot_ctl_Motor_PID_Enable = false;
-
-    if (bot_ctl_Motor_PID_Enable)
-    {
-    bot_motor_command();  
-    }  
-
-   WAIT(1);
- 
-  }
-         
-}
-
 void bot_bt_input(ASIZE delay){ // user input motion control from BT app
   while (1)
   {
@@ -1076,23 +562,6 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
     WAIT(delay);
   }
 
-
-
-/*
-
-
-
-  if (GamePad.isStartPressed())
-  {
-    
-  }
-
-  if (GamePad.isSelectPressed())
-  {
-    
-  }
-  */    
-
     WAIT(delay);
   }
   
@@ -1161,7 +630,7 @@ void setup()
     pid_count = 0; current = 0;
 
 
-   // create_task((char *)"MTRTST",motor_test,5000, MINSTACK );   
+   // create_task((char *)"MTRTST",svc_motor_test,5000, MINSTACK );   
    
     /************** TASKS *******************/
     // EX 2000ms:  create_task((char *)"TSKNAM",function_name,2000, MINSTACK );
@@ -1192,7 +661,7 @@ void setup()
 
     while (1);
     #if ((MACHINE != MACH_AVR) && (MACHINE != MACH_ARM))
-    return 0;
+    return ;
     #endif
 }
 
