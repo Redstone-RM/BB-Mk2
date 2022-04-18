@@ -1,64 +1,56 @@
-/* -------------------------------------- */
+/*############################################################################## */
 #define VERSION "Bum Biter MK-2.2.0"
 #define DEBUG true
 
 #include "botmsg.h" // botmsg code for Communications 
 #include "mtrctl.h" // motor control functions 
 #include "sensors.h" // sensor related code
+/*############################################################################## */
 
-/* -------------------------------------- */
-#include <Arduino.h> // Only Needed for PlatformIO.
-#include <util/atomic.h> // Using ATOMIC_BLOCK macro for wheel encoder reading of volitile ints.
-
-// LMX 
-#define BAUDRATE 57600
-#define PRINTF Serial.println
-#define SPRINTF sprintf
-#include <stdio.h> // LMX
+/*######################## libtask LMX ######################################### <dpa> */
+#include <stdio.h> // LMX 
 #include <task.h> // LMX
 #include <log.h> // LMX
 #include <sysclock.h> // LMX
+/* 
+Choose one of the below:  
+#define WAIT(d)  { d *= 10; cnt = 0; while (cnt++ < d) defer(); }
+#define WAIT(d)  { msleep(d); }
+#define WAIT(d)  { wake_after(d); }
+*/
+#define WAIT(d)  { wake_after(d); }
+#define BAUDRATE 57600
+#define PRINTF Serial.println
+#define SPRINTF sprintf
 
-// Sensors
+/* --------------- System ----------------------- */
+#include <Arduino.h> 
+#include <util/atomic.h> // Using ATOMIC_BLOCK macro for wheel encoder reading of volitile ints.
+
+/* --------------- Sensors ------------------------ */ 
 #include <SharpIR.h> // IR Distance Sensors
 
-//#include <PID_v1.h> // PID https://playground.arduino.cc/Code/PIDLibrary/  https://github.com/br3ttb/Arduino-PID-Library/
-
-
-// BlueTooth Config
+/* --------------- BlueTooth ------------------------ */  
 #include <Dabble.h> // Dabble Bluetooth Contoller. https://thestempedia.com/docs/dabble
 #define CUSTOM_SETTINGS // You can reduce the size of compiled library by enabling only modules you want to use. First define CUSTOM_SETTINGS followed by #define INCLUDE_modulename
 #define INCLUDE_GAMEPAD_MODULE // Include Dabble Gamepad module https://thestempedia.com/docs/dabble/game-pad-module
  
-// I2C Datum TRANSFER from ROS2 Controler. see https://github.com/PowerBroker2/SerialTransfer
-#include <I2CTransfer.h> 
-#define I2C_ADDR 9  // I2C Slave Address when in slave mode. IMPORTANT. SerailTransfer.h defaults addr 0 not configurable AFIAK here ATM .
-  // Begin I2C control message structs.
-I2CTransfer  myTransfer; // create I2C Transfer Obj
-
-// create crtlmsg and statmsg struct to hold I2c Transfer "datum" Obj 
-// ROS2 Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
+/* --------------- I2C  ------------------------ */   
+#include <I2CTransfer.h> // I2C Datum TRANSFER from ROS2 Controler. see https://github.com/PowerBroker2/SerialTransfer
+#define I2C_ADDR 9  // I2C Slave Address 
+I2CTransfer  myTransfer; // create I2C Transfer Obj 
 
 struct ctrlmsg { 
   float x;
   float z;
   char  debug[8];
-} botmsg; 
-
+} botmsg;  // ROS2 Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
 
 
 /* ------------ <dpa> -------------------------- */
 void printkbuf(char *s) {  // dpa
    PRINTF(s);
 }
-/* Choose one of the below:  */ 
-// #define WAIT(d)  { d *= 10; cnt = 0; while (cnt++ < d) defer(); }
-// #define WAIT(d)  { msleep(d); }
-#define WAIT(d)  { wake_after(d); }
-/* ------------</dpa> -------------------------- */
-
-
-/* -------------Definitions ------------------------- */
 
 
 
@@ -83,55 +75,19 @@ scope_type_name
                      
 
 */
-int bot_init_runlvl  = 5; // Default init level.
-char bot_sys_debug[] = "Hello World"; // string to hold debug output. For Serial or logging
 
 String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
 bool dataflag = 0;
 
-// Motor Command PID Control
-bool bot_ctl_Motor_PID_Enable = 0;
-
-double bot_ctl_velocity, bot_ctl_rotation;  // PID motor control vars
-double mtr_cmd_a_Input, mtr_cmd_a_Output, mtr_cmd_a_Setpoint;
-double mtr_cmd_b_Input, mtr_cmd_b_Output, mtr_cmd_b_Setpoint;
-
-double aKp=0.35, aKi=10, aKd= 0.1;
-double bKp=0.35, bKi=10, bKd= 0.1;
-
-// PID mtr_cmd_a_PID(&mtr_cmd_a_Input, &mtr_cmd_a_Output, &mtr_cmd_a_Setpoint,aKp,aKi,aKd,P_ON_M, DIRECT); // Motor A PID Object
-    // mtr_cmd_a_PID.SetSampleTime(100); // match sample time for RPM
-// PID mtr_cmd_b_PID(&mtr_cmd_b_Input, &mtr_cmd_b_Output, &mtr_cmd_b_Setpoint,bKp,bKi,bKd,P_ON_M, DIRECT); // Motor B PID Object
-    //mtr_cmd_b_PID.SetSampleTime(100); // 10Hz sample time to match RPM calc.
-
-
-
-/********** SENSOR GLOBALS **********/
-int bot_sen_sonar_fwd_ping = 1; // Distance reported from fwd Ultra-Sonic Sensor rounded up to whole CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
-int bot_sen_sonar_rear_ping = 1; // Distance reported from rear Ultra-Sonic Sensor rounded up CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
-int bot_sen_sonar_ping_cnt = 5; // how many pings to sample for avg 
-
-
-int bot_sen_ir_right_ping = 0 ; // Distance reported from Right Analog IR 
-int bot_sen_ir_left_ping = 0 ; // Distance reported from Left Analog IR 
-bool bot_sen_ir_fwd_ping = 0 ; // Fwd Digital IR 
-bool bot_sen_ir_rear_ping = 0 ; // Rear Digital IR
-
 SharpIR IRsensorRight( SharpIR::GP2Y0A41SK0F,IRPin_1);  // RIGHT IR sensor object. 
 SharpIR IRsensorLeft( SharpIR::GP2Y0A41SK0F,IRPin_2);  // LEFT IR sensor object. 
-
-// set some reaction distances in CM
-//int bot_ctl_ir_1_ping_lowval = 15; // halt at this distance
-int bot_ctl_sonar_ping_minval = 15; // halt at this distance
-int bot_ctl_sonar_ping_lowval = 45; // turn until at least this much fwd space observed.
-
-// BEHAVIOR CONTROL FLAGS
 
 
 /* ----------- Functions --------------------------- */
 bool randomBool() {
    return rand() > (RAND_MAX / 2);
 }
+
 // BlueTooth Terminal Output
 void bot_sys_bt_conlog(String inString = ""){
   Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
@@ -248,7 +204,6 @@ float clip(float value, float min, float max ){ // dpa inspired cliping function
 
 /* 
 -----------------------------------------  INIT Section ------------------------------------------
- TBD maybe? - Emulate a sysV type init function system. 
 // init functions are named init_runlevel_class_name
 // runlevels 
 // 0 - Reserved        - unused currently
@@ -272,17 +227,7 @@ void I2C_callback()
 }
 const functionPtr callbackArr[] = { I2C_callback }; // Call back function pointer array. Orig lib Demo code says "persistent allocation required"
 
-/* LVL 2 INIT Functions */ 
-
-void init_2_sonar_setup(){
-    pinMode(trigPinFwd, OUTPUT);
-    pinMode(echoPinFwd, INPUT);
-
-    pinMode(trigPinRear, OUTPUT);
-    pinMode(echoPinRear, INPUT);
-}
 /* LVL 3 INIT Functions */
-
 
 int sonar_ping(int num = 0 ){  // take a sample number of pings and return rounded avg in CM. Sum adds 1cm to reserve 0 as an error situation. since this is only used as bumper and not measuerment we dont care much atm.
     float duration = 0, distance; 
@@ -337,8 +282,6 @@ void ir_ping(){
   WAIT(1);
 }
 /* Level 5 Control Functions */
-
-
 
 void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
   while(1){
@@ -460,18 +403,6 @@ void svc_encoders(ASIZE ignored){ // 10Hz Wheel encoder update function
 
       WAIT(1);
       }
-  
-}
-
-void bot_svc_bt_pin_monitor(ASIZE delay){
-  while (1)
-  {
-    Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
-    PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app
-    PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app  /* code */
-    WAIT(delay);
-  }
-  
   
 }
 
@@ -657,6 +588,7 @@ void setup()
     create_task((char *)"BTCTL",bot_bt_input,5, MINSTACK); // BlueTooth User Input Controler
 
     scheduler(); // Main LMX task scheduler
+
     PRINTF("Should never get here."); // Leave this alone.
 
     while (1);
@@ -670,5 +602,4 @@ void loop()
   /* Noting to see here. Move along. Not the droid you're looking for. */
   asm("nop");
 }
-
 /* EOF */

@@ -1,3 +1,13 @@
+/********** SENSOR GLOBALS **********/
+int bot_sen_sonar_fwd_ping = 1; // Distance reported from fwd Ultra-Sonic Sensor rounded up to whole CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
+int bot_sen_sonar_rear_ping = 1; // Distance reported from rear Ultra-Sonic Sensor rounded up CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
+int bot_sen_sonar_ping_cnt = 5; // how many pings to sample for avg 
+
+int bot_sen_ir_right_ping = 0 ; // Distance reported from Right Analog IR 
+int bot_sen_ir_left_ping = 0 ; // Distance reported from Left Analog IR 
+bool bot_sen_ir_fwd_ping = 0 ; // Fwd Digital IR 
+bool bot_sen_ir_rear_ping = 0 ; // Rear Digital IR
+
 // SENSONR PINS 
   //  HC-SR04 Ultra-sonic Distance Sensors
       // FWD 
@@ -18,3 +28,15 @@
 // #define IRPin_Rear 5
 
 #define LED_HEARTBEAT_PIN 13
+
+void init_2_sonar_setup(){
+    pinMode(trigPinFwd, OUTPUT);
+    pinMode(echoPinFwd, INPUT);
+
+    pinMode(trigPinRear, OUTPUT);
+    pinMode(echoPinRear, INPUT);
+}
+
+
+
+
