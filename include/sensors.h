@@ -27,7 +27,12 @@ bool bot_sen_ir_rear_ping = 0 ; // Rear Digital IR
 // #define IRPin_FWD 4 
 // #define IRPin_Rear 5
 
+/* Layer 1 function alias definitions    */
+//heartbeat LED .
 #define LED_HEARTBEAT_PIN 13
+#define LED1_ON  digitalWrite(LED_HEARTBEAT_PIN, HIGH) // onboard LED used for heartbeat.
+#define LED1_OFF digitalWrite(LED_HEARTBEAT_PIN, LOW)  // onboard LED used for heartbeat.
+
 
 void init_2_sonar_setup(){
     pinMode(trigPinFwd, OUTPUT);

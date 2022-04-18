@@ -1,27 +1,18 @@
 /*############################################################################## */
-#define VERSION "Bum Biter MK-2.2.0"
+// VERSION "Bum Biter MK-2.2.0"
 #define DEBUG true
 
 #include "botmsg.h" // botmsg code for Communications 
 #include "mtrctl.h" // motor control functions 
 #include "sensors.h" // sensor related code
+#include "helper.h"  // basic configuration and helper functions
 /*############################################################################## */
 
-/*######################## libtask LMX ######################################### <dpa> */
+/*######################## </libtask LMX dpa> ######################################### */
 #include <stdio.h> // LMX 
 #include <task.h> // LMX
 #include <log.h> // LMX
 #include <sysclock.h> // LMX
-/* 
-Choose one of the below:  
-#define WAIT(d)  { d *= 10; cnt = 0; while (cnt++ < d) defer(); }
-#define WAIT(d)  { msleep(d); }
-#define WAIT(d)  { wake_after(d); }
-*/
-#define WAIT(d)  { wake_after(d); }
-#define BAUDRATE 57600
-#define PRINTF Serial.println
-#define SPRINTF sprintf
 
 /* --------------- System ----------------------- */
 #include <Arduino.h> 
@@ -53,13 +44,6 @@ void printkbuf(char *s) {  // dpa
 }
 
 
-
-/* Layer 1 function alias definitions    */
-//  heartbeat LED .
-#define LED1_ON  digitalWrite(LED_HEARTBEAT_PIN, HIGH) // onboard LED used for heartbeat.
-#define LED1_OFF digitalWrite(LED_HEARTBEAT_PIN, LOW)  // onboard LED used for heartbeat.
-
-
 /* 
 STATE VARIABLES 
 scope_type_name
@@ -72,21 +56,13 @@ scope_type_name
                      sen   - Sensor Data. Readings from various sensor processing tasks.
                      cal   - Calculating variables. Raw vars used in other calcuations
                      cfg   - Configureable stuff.
-                     
-
 */
 
 String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
-bool dataflag = 0;
 
 SharpIR IRsensorRight( SharpIR::GP2Y0A41SK0F,IRPin_1);  // RIGHT IR sensor object. 
 SharpIR IRsensorLeft( SharpIR::GP2Y0A41SK0F,IRPin_2);  // LEFT IR sensor object. 
 
-
-/* ----------- Functions --------------------------- */
-bool randomBool() {
-   return rand() > (RAND_MAX / 2);
-}
 
 // BlueTooth Terminal Output
 void bot_sys_bt_conlog(String inString = ""){
@@ -96,25 +72,6 @@ void bot_sys_bt_conlog(String inString = ""){
     }
 }
 
-
-
-/* ------------ <dpa> -------------------------- */
-/* Count idle cycles per second dpa original function */ 
-unsigned long idle_cnt;
-
-void cpu_idle(ASIZE ignored)
-{
-    unsigned long t;
-    unsigned long cnt;
-    
-    t = sysclock + 1000;
-    while (1) {
-        idle_cnt = proc_counter;
-        proc_counter = 0;
-        // WAIT(1000);
-        PERIOD(&t,1000);
-    }
-}
 
 /* -------------------------------------- */
 void console_log(ASIZE delay)
@@ -179,28 +136,8 @@ void flash(ASIZE delay)
 }
 /* ----------------------------------------- */
 
-void stats_task(ASIZE delay) /*  <dpa>  */
-{
-    TSIZE t;
-    t = sysclock + delay;
 
-    while (1) {
-      // WAIT(delay);
-      PERIOD(&t,delay);
-      PRINTF("");
-      SPRINTF(sbuf,"# Sysclock\t%ld\tSampleclock\t%ld\tIdleHz\t%ld",
-              sysclock,sampleclock,idle_cnt);
-      PRINTF(sbuf);
-      PRINTF("");
-      print_llist(1);
-    }
-}
 
-float clip(float value, float min, float max ){ // dpa inspired cliping function
-  if (value > max ) return max;
-  if (value < min ) return min;
-  return value;
-}
 
 /* 
 -----------------------------------------  INIT Section ------------------------------------------
@@ -514,16 +451,6 @@ void system_init(void)
 
 }
 
-/* ------------ <dpa> -------------------------- */
-/* Create signon and terminate task */
-void signon(ASIZE version)
-{
-  PRINTF(VERSION);
-  wake_after(2000);
-  PRINTF("# SIGNON Messages signing off!\n");
-  DELAY(1000);
-  terminate();
-}
 
 /*-----------------------------------------  MAIN ------------------------------------------
 
