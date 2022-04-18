@@ -14,8 +14,11 @@ This represents a WORK IN PROGRESS and a fun learning project.
 
 **Current status** is that Tele-operation is possible with the Dabble Bluetooth game pad app. Bluetooth terminal commands work as well so making something respond to a voice typed command could be simple. however that has not been done.
 
-ROS2 Integration is being developed by having this hardware exchange messages with a WiFi enabled board running micro-ROS. In this case an Arduino Nano RP2040 Connect.
+ROS2 Integration is being developed by having this hardware exchange messages with a WiFi enabled board running micro-ROS. 
+In this case an Arduino Nano RP2040 Connect with micro-ROS installed [See notes on the install process](https://gist.github.com/Redstone-RM/0ca459c32ec5ead8700284ff56a136f7).
 
-The griper arm is not assembled.
+Addiontally the code for the ROS2 Node [NanoNode is available here](https://github.com/Redstone-RM/NanoNode) .
+
+The griper arm, (Aluminium 4DOF Arm Kit) is not fully assembled will be mounted on top of the rover.
   
 Many more enhancements are in the dream pipe.
