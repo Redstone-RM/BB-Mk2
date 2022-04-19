@@ -46,7 +46,7 @@ struct ctrlmsg {
   float x;
   float z;
   char  debug[8];
-} botmsg;  // ROS2 Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
+} botmsg;  // Micro-ROS Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
 
 
 /* ------------ <dpa> -------------------------- */
