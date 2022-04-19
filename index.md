@@ -1,5 +1,7 @@
-# BumBiter Mk 2
--BB Mk 2
+# BB Mk 2
+-"BumBiter" Mk 2
+
+<img src="./assets/BBMk2.jpg" width="100" height="100">
 
 ### Acknowledgements. 
 At the core of this build is a task scheduler called libtask which was shamelessly stolen from
