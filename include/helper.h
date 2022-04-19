@@ -12,6 +12,10 @@
 #define PRINTF Serial.println // LMX 
 #define SPRINTF sprintf // LMX 
 #define MACHINE MACH_AVR // this is currently set in task.h so this does nothing but the functionalty needs to be migrated.
+#define WAIT(d)  { wake_after(d); }
+#define BAUDRATE 57600
+#define PRINTF Serial.println
+#define SPRINTF sprintf
 
 
 /* ------------ <dpa> -------------------------- */

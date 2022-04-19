@@ -1,4 +1,6 @@
 #pragma once
+#include <task.h>
+#define WAIT(d)  { wake_after(d); }
 
 /*  MOTOR CONTROL  
       Motor setup notes
