@@ -1,5 +1,5 @@
-# BB Mk 2
--"BumBiter" Mk 2
+# BB Mk2
+-"BumBiter" Mk2
 
 <img src="./assets/BBMk2.jpg" width="100" height="100">
 
