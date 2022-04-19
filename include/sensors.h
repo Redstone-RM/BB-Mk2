@@ -1,3 +1,7 @@
+#pragma once
+#include <task.h>
+#define WAIT(d)  { wake_after(d); }
+
 /********** SENSOR GLOBALS **********/
 int bot_sen_sonar_fwd_ping = 1; // Distance reported from fwd Ultra-Sonic Sensor rounded up to whole CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
 int bot_sen_sonar_rear_ping = 1; // Distance reported from rear Ultra-Sonic Sensor rounded up CM. Starts at 1 because <2 returns 0 as an out of bounds error cond. 1 is an Unread cond.
@@ -36,7 +40,6 @@ bool bot_sen_ir_rear_ping = 0 ; // Rear Digital IR
 void init_2_sonar_setup(){
     pinMode(trigPinFwd, OUTPUT);
     pinMode(echoPinFwd, INPUT);
-
     pinMode(trigPinRear, OUTPUT);
     pinMode(echoPinRear, INPUT);
 }

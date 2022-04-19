@@ -14,16 +14,6 @@
 #include <task.h> // LMX
 #include <log.h> // LMX
 #include <sysclock.h> // LMX
-/* 
-Choose one of the below:  
-#define WAIT(d)  { d *= 10; cnt = 0; while (cnt++ < d) defer(); }
-#define WAIT(d)  { msleep(d); }
-#define WAIT(d)  { wake_after(d); }
-*/
-#define WAIT(d)  { wake_after(d); }
-#define BAUDRATE 57600
-#define PRINTF Serial.println
-#define SPRINTF sprintf
 
 /* --------------- System ----------------------- */
 #include <Arduino.h> 
@@ -46,7 +36,7 @@ struct ctrlmsg {
   float x;
   float z;
   char  debug[8];
-} botmsg;  // ROS2 Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
+} botmsg;  // Micro-ROS Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
 
 
 /* ------------ <dpa> -------------------------- */
@@ -68,11 +58,8 @@ scope_type_name
                      cfg   - Configureable stuff.
 */
 
-String Serialdata = ""; // Output String object for BlueTooth Serial Terminal output.
-
 SharpIR IRsensorRight( SharpIR::GP2Y0A41SK0F,IRPin_1);  // RIGHT IR sensor object. 
 SharpIR IRsensorLeft( SharpIR::GP2Y0A41SK0F,IRPin_2);  // LEFT IR sensor object. 
-
 
 // BlueTooth Terminal Output
 void bot_sys_bt_conlog(String inString = ""){
@@ -81,7 +68,6 @@ void bot_sys_bt_conlog(String inString = ""){
     Terminal.println(inString);
     }
 }
-
 
 /* -------------------------------------- */
 void console_log(ASIZE delay)
@@ -146,9 +132,6 @@ void flash(ASIZE delay)
 }
 /* ----------------------------------------- */
 
-
-
-
 /* 
 -----------------------------------------  INIT Section ------------------------------------------
 // init functions are named init_runlevel_class_name
@@ -202,8 +185,7 @@ int sonar_ping(int num = 0 ){  // take a sample number of pings and return round
         digitalWrite(trigPinRear,LOW);  
        // measure response
     duration = pulseIn(echoPinRear,HIGH);
-    }
-    
+    }  
 
     // calculate distance in CM
     distance = (duration / 2) * 0.0343; // speed of sound at sea level 20C 343 m/s  adjust for cond?
