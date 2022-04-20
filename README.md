@@ -9,7 +9,7 @@ libtask is the task manager at core of this build. This was code is shamelessly 
 
 The nickname was given by my daughter Alyssa who said she wanted a robot that would patrol the house and bite bad guys in the bum but also be fun and bring you stuff.
 
-The initial build, the ***BumBiter Mk1***, was initially built on Arduino Uno (later Nano) hardware. Lack of multitasking lead to the search that eventually rested on libtask/LMX and I upgraded to the Arduino Mega 2560 because that's I already had.
+The initial build, the ***BumBiter Mk1***, was initially built on Arduino Uno (later Nano) hardware. Lack of multitasking lead to the search that eventually rested on libtask/LMX and I upgraded to the Arduino Mega 2560 because that's what I already had.
 
 This represents a WORK IN PROGRESS and a fun learning project.
 
@@ -30,7 +30,8 @@ The build documents, pictures and videos are coming together as work is complete
 - Sharp GP2Y0A41SK0F IR distance sensor 4 - 30CM  - x 2 located left and right forward of wheels. 
 - Sharp GP20D21 21CM Digital IR Distance sensor mounted fwd as a backup to Ultrasonic
 - Not yet moved from mk1 is the Passive Piezo speaker and tone lib for 8bit jams
-- HM-10 V3 BT 4.0 on Serial3   
+- HM-10 V3 BT 4.0 on Serial3
+- Adding soon 4DOF gripper.   
 
 Software:
 - libtask LMX from D.P. Anderson as a scheduler 
