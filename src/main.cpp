@@ -214,7 +214,9 @@ void ir_ping(){
 
 void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
   while(1){
+    txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
     txData.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
+    strcpy (txData.debug, "INFO"); // short logging message
     txData.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
     txData.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
     txData.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
@@ -223,11 +225,10 @@ void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
     txData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
     txData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
     txData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
-    txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
-    strcpy (txData.debug, "INFO"); // short logging message
-
+    
     botmsg.x =  rxData.x; 
     botmsg.z =  rxData.z;
+
     strcpy(botmsg.debug,rxData.debug);
 
     WAIT(delay);

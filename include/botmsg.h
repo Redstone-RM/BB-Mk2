@@ -3,7 +3,7 @@
 #include <Wire.h>
 
 
-
+/*
 struct I2cTxStruct { // A status msg passed back and forthe from an I2C connected board.
   float x; //  twist  current requested X value. Feedback  // 4 bytes
   float z; //  twist  current requested Z value. Feedback  // 4 bytes
@@ -38,14 +38,48 @@ struct I2cRxStruct { // A status msg passed back and forthe from an I2C connecte
 } ;                                                        // --------
                                                            // 32 Bytes
 
+*/
 
+struct I2cTxStruct { // A status msg passed back and forthe from an I2C connected board.
+  float x; //  twist  current requested X value. Feedback  // 4 bytes
+  float z; //  twist  current requested Z value. Feedback  // 4 bytes
+  char  debug[8]; // short logging message 7 Char  + Null  // 8 bytes
+  int   mtr_pos_right; // right motor encoder position     // 2 bytes
+  int   mtr_pos_left; // left motor encoder position       // 2 bytes
+  int   mtr_speed_right;  // motor a speed                 // 2 bytes
+  int   mtr_speed_left;  // motor b speed                  // 2 bytes
+  int   sen_sonar_fwd; // forward sonar value              // 2 bytes
+  int   sen_sonar_rear; // rear sonar value                // 2 bytes
+  int   sen_ir_right; // right IR value                    // 2 bytes
+  int   sen_ir_left; // left IR value                      // 2 bytes
+  byte padding[10]; // not sure                            // 10 bytes
+} ;                                                        // --------
+                                                           // 42 Bytes
+
+
+
+struct I2cRxStruct { // A status msg passed back and forthe from an I2C connected board.
+  float x; //  twist  current requested X value. Feedback  // 4 bytes
+  float z; //  twist  current requested Z value. Feedback  // 4 bytes
+  char  debug[8]; // short logging message 7 Char  + Null  // 8 bytes
+  int   mtr_pos_right; // right motor encoder position     // 2 bytes
+  int   mtr_pos_left; // left motor encoder position       // 2 bytes
+  int   mtr_speed_right;  // motor a speed                 // 2 bytes
+  int   mtr_speed_left;  // motor b speed                  // 2 bytes
+  int   sen_sonar_fwd; // forward sonar value              // 2 bytes
+  int   sen_sonar_rear; // rear sonar value                // 2 bytes
+  int   sen_ir_right; // right IR value                    // 2 bytes
+  int   sen_ir_left; // left IR value                      // 2 bytes
+  byte  padding[10];                                        // 10 bytes
+} ;                                                        // --------
+                                                            // 42 Bytes
 
 //============
 bool newTxData = false;
 bool newRxData = false;
 bool rqSent = false;
 
-I2cTxStruct txData = {0, 0, "INIT"};
+I2cTxStruct txData = {0, 0, "INIT001"};
 I2cRxStruct rxData;
 
         // this function is called by the Wire library when a message is received
@@ -69,5 +103,6 @@ void receiveEvent(int numBytesReceived) {
 void requestEvent() {
     Wire.write((byte*) &txData, sizeof(txData));
     rqSent = true;
+    Serial.println ("I2C Request recieved");
 }
 
