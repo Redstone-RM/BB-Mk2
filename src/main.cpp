@@ -29,7 +29,7 @@
  
 /* --------------- I2C  ------------------------ */   
 #include <I2CTransfer.h> // I2C Datum TRANSFER from ROS2 Controler. see https://github.com/PowerBroker2/SerialTransfer
-#define I2C_ADDR 9  // I2C Slave Address 
+#define I2C_ADDR 0  // I2C Slave Address 
 I2CTransfer  myTransfer; // create I2C Transfer Obj 
 
 struct ctrlmsg { 
@@ -214,7 +214,9 @@ void ir_ping(){
 
 void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
   while(1){
+    txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
     txData.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
+    strcpy (txData.debug, "INFO"); // short logging message
     txData.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
     txData.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
     txData.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
@@ -223,13 +225,10 @@ void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
     txData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
     txData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
     txData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
-    txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
-    strcpy (txData.debug, "INFO"); // short logging message
-
-    botmsg.x =  rxData.x; 
-    botmsg.z =  rxData.z;
-    strcpy(botmsg.debug,rxData.debug);
-
+  
+    // botmsg.x =  rxData.x; 
+    // botmsg.z =  rxData.z;
+    // strcpy(botmsg.debug,rxData.debug);
     WAIT(delay);
   }
 }
@@ -452,22 +451,15 @@ void setup()
 
 {
     system_init();
-// I2C TEst
-        // set up I2C
-    Wire.begin(I2C_ADDR); // join i2c bus
-    Wire.onReceive(receiveEvent); // register function to be called when a message arrives
-    Wire.onRequest(requestEvent); // register function to be called when a request arrives
 
-
-/* Serial Transfer Library // backup working code
-
-    Wire.begin(I2C_ADDR);// 
+// Setup I2C Comms with Serial Transfer Library  
+    Wire.begin(I2C_ADDR);
     configST I2C_myConfig; 
     I2C_myConfig.debug        = true;
     I2C_myConfig.callbacks    = callbackArr;
     I2C_myConfig.callbacksLen = sizeof(callbackArr) / sizeof(functionPtr);
     myTransfer.begin(Wire, I2C_myConfig);
-*/
+
 
     printv = printkbuf;
     PRINTF("Howdy Console!\n");       
