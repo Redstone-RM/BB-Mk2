@@ -338,7 +338,9 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
   while (1)
   {
     Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
+    
     if (DEBUG){
+      Dabble.DabbleSerial->write("DATA0"); //Enter baudrate of your bluetooth module 
       //PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app. Currently causes hang. BUG TBD.
       //PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app
     }
@@ -435,7 +437,8 @@ void system_init(void)
     /* AVR & ARM Teesy3.1  */
     sysclock_init(); //  <dpa>. clock.
     Serial.begin(BAUDRATE); 
-    Dabble.begin(9600);  //Enter baudrate of your bluetooth module 
+    Dabble.begin(9600); 
+    
     init_1_led_heartbeat(); // LED heartbeat
     init_2_sonar_setup(); // Initalize sonar
     init_3_motors_setup(); // Motor Init    
