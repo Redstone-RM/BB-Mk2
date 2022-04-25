@@ -340,7 +340,7 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
     Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
     
     if (DEBUG){
-      Dabble.DabbleSerial->write("DATA0"); //Enter baudrate of your bluetooth module 
+      Dabble.DabbleSerial->write("DATA0"); // Acts as serial device. Abstracts BLE Service & BLECharacteristic ffe0 on the HM10 module. Read by BLE board as BLE_UUID_SENSOR_DATA_SERVICE "ffe0"  & BLE_UUID_MULTI_SENSOR_DATA  "ffe1"
       //PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app. Currently causes hang. BUG TBD.
       //PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app
     }
