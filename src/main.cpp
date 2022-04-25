@@ -38,6 +38,22 @@ struct ctrlmsg {
   char  debug[8];
 } botmsg;  // Micro-ROS Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
 
+void receiveData() {
+   
+   if (Dabble.DabbleSerial->available() < 11) {
+     // error
+     return;
+   }
+   for (byte n = 0; n < 11; n++) {
+      pcData[n] = Dabble.DabbleSerial->read();
+   }
+   // TODO check CRC
+   for (byte n = 0; n < 11; n++) {
+     inputData.pcLine[n] = pcData[n];
+   }
+   newData = true;
+}
+
 
 /* ------------ <dpa> -------------------------- */
 void printkbuf(char *s) {  // dpa
@@ -214,6 +230,11 @@ void ir_ping(){
 
 void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
   while(1){
+    // testing BLE. yeah I know.
+    receiveData();
+    displayData();
+ // remove above test code.
+
     txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
     txData.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
     strcpy (txData.debug, "INFO"); // short logging message
@@ -229,6 +250,7 @@ void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
     // botmsg.x =  rxData.x; 
     // botmsg.z =  rxData.z;
     // strcpy(botmsg.debug,rxData.debug);
+    
     WAIT(delay);
   }
 }
@@ -343,6 +365,7 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
       Dabble.DabbleSerial->write("DATA0"); // Acts as serial device. Abstracts BLE Service & BLECharacteristic ffe0 on the HM10 module. Read by BLE board as BLE_UUID_SENSOR_DATA_SERVICE "ffe0"  & BLE_UUID_MULTI_SENSOR_DATA  "ffe1"
       //PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app. Currently causes hang. BUG TBD.
       //PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app
+
     }
 
     /* BEGIN Game Pad Code. *** TBD ** Move to seperate function */
