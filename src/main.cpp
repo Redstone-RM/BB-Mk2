@@ -38,21 +38,6 @@ struct ctrlmsg {
   char  debug[8];
 } botmsg;  // Micro-ROS Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
 
-void receiveData() {
-   
-   if (Dabble.DabbleSerial->available() < 11) {
-     // error
-     return;
-   }
-   for (byte n = 0; n < 11; n++) {
-      pcData[n] = Dabble.DabbleSerial->read();
-   }
-   // TODO check CRC
-   for (byte n = 0; n < 11; n++) {
-     inputData.pcLine[n] = pcData[n];
-   }
-   newData = true;
-}
 
 
 /* ------------ <dpa> -------------------------- */

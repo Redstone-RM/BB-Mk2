@@ -87,10 +87,9 @@ struct moveItem {
 };
 */
 struct moveItem {
-    float x;                    // 4 bytes
-    float z;                    // 4
-    int testval;                // 2
-    char debug[1];              // 1    
+    float x;                     // 4 bytes
+    float z;                     // 4
+    char cmd[3];                 // 3    
                                 //====
                                 // 11 Bytes
 };
@@ -110,6 +109,21 @@ byte pcData[11];
 boolean newData = false;
 boolean askForData = true;
 
+void receiveData() {
+   
+   if (Dabble.DabbleSerial->available() < 11) {
+     // error
+     return;
+   }
+   for (byte n = 0; n < 11; n++) {
+      pcData[n] = Dabble.DabbleSerial->read();
+   }
+   // TODO check CRC
+   for (byte n = 0; n < 11; n++) {
+     inputData.pcLine[n] = pcData[n];
+   }
+   newData = true;
+}
 
 
 
@@ -122,11 +136,8 @@ void displayData() {
   Serial.print(" ");
   Serial.print(inputData.moveData.z);
   Serial.print(" ");
-  Serial.print(inputData.moveData.debug);
+  Serial.print(inputData.moveData.cmd);
   Serial.print(" ");
-  Serial.print(inputData.moveData.testval);
-  Serial.print(" ");
-  
   Serial.println('>');
   newData = false;
   askForData = true;
