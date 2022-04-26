@@ -69,13 +69,13 @@ void bot_sys_bt_conlog(String inString = ""){
 /* -------------------------------------- */
 void console_log(ASIZE delay)
 {
-  unsigned long cnt;
+  //unsigned long cnt;
   String debug_msg;
   
   while (1) {
 
     if(DEBUG){
-    displayData(); // Display latest inputData.moveData from botmsg.h tp the serial monitor
+    
     debug_msg = "";
     debug_msg += ("======================== STATUS: ONLINE  ========================\n"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
     debug_msg +=  ("FWD SONAR :\t") + String (bot_sen_sonar_fwd_ping) + "\t";    
@@ -87,6 +87,8 @@ void console_log(ASIZE delay)
     debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_b * 4 )  + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
     debug_msg +=  "CTRL X:"+ String(botmsg.x) + " Z: " + String(botmsg.z) + " CmD: " + String(botmsg.cmd) + "\n"; 
     PRINTF(debug_msg);
+
+    displayData(); // Display latest inputData.moveData from botmsg.h t0 the serial monitor/ TO BE IMPROVED
 
     //bot_sys_bt_conlog("Motor A\nRPM:" + String(mtr_sen_rpm_a) + "\nSPD: " + String (mtr_sen_speed_a) + "\nROT: " + String( mtr_sen_stat_a) +"\nPOS: " + String(mtr_sen_pos_a)+"\n");
     //bot_sys_bt_conlog("Motor B\nRPM:" + String(mtr_sen_rpm_b) + "\nSPD: " + String (mtr_sen_speed_b) + "\nROT: " + String( mtr_sen_stat_b) +"\nPOS: " + String(mtr_sen_pos_b)+"\n");
@@ -208,30 +210,25 @@ void svc_BLE_conn (ASIZE delay){ // Internal BLE Data Exchange Service
   while(1){
     
     receiveData(); // check BLE Serial device BLE Service Characteristics. New BLE data will be written there.
-    if (newData){ // update botmsg
+    if (newData){ // update global ctrl message struct :: botmsg 
       botmsg.x = inputData.moveData.x;
       botmsg.z = inputData.moveData.z;
       strcpy(botmsg.cmd, inputData.moveData.cmd);     
-      // displayData();
+      // displayData(); // serial monitor output of new BLE data received
     }
- // remove above test code.
-/*
-    txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
-    txData.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
-    strcpy (txData.debug, "INFO"); // short logging message
-    txData.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
-    txData.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
-    txData.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
-    txData.mtr_speed_left  = mtr_ctl_speed_b;  // motor b speed
-    txData.sen_sonar_fwd   = bot_sen_sonar_fwd_ping; // forward sonar value
-    txData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
-    txData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
-    txData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
+    // populate the outgoing data struct with sensor data.
+    outputData.statusData.x = int(botmsg.x); // #TBD int to float convert
+    outputData.statusData.z = int(botmsg.z); // #TBD int to float convert
+    outputData.statusData.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
+    outputData.statusData.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
+    outputData.statusData.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
+    outputData.statusData.mtr_speed_left  = mtr_ctl_speed_b;  // motor b speed
+    outputData.statusData.sen_sonar_fwd   = bot_sen_sonar_fwd_ping; // forward sonar value
+    outputData.statusData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
+    outputData.statusData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
+    outputData.statusData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
+    sendBLEData();
 
-    // botmsg.x =  rxData.x; 
-    // botmsg.z =  rxData.z;
-    // strcpy(botmsg.debug,rxData.debug);
-  */  
     WAIT(delay);
   }
 }
