@@ -27,15 +27,11 @@
 #define CUSTOM_SETTINGS // You can reduce the size of compiled library by enabling only modules you want to use. First define CUSTOM_SETTINGS followed by #define INCLUDE_modulename
 #define INCLUDE_GAMEPAD_MODULE // Include Dabble Gamepad module https://thestempedia.com/docs/dabble/game-pad-module
  
-/* --------------- I2C  ------------------------ */   
-#include <I2CTransfer.h> // I2C Datum TRANSFER from ROS2 Controler. see https://github.com/PowerBroker2/SerialTransfer
-#define I2C_ADDR 0  // I2C Slave Address 
-I2CTransfer  myTransfer; // create I2C Transfer Obj 
 
 struct ctrlmsg { 
   float x;
   float z;
-  char  debug[8];
+  char  cmd[3];
 } botmsg;  // Micro-ROS Controler> ctrlmsg> I2C"datum"> I2C Callback> statmsg> I2C> ROS2> Topic
 
 
@@ -79,6 +75,7 @@ void console_log(ASIZE delay)
   while (1) {
 
     if(DEBUG){
+    displayData(); // Display latest inputData.moveData from botmsg.h tp the serial monitor
     debug_msg = "";
     debug_msg += ("======================== STATUS: ONLINE  ========================\n"); // TBD ADD SOME MEANINGFULL OUTPUT <=== HERE
     debug_msg +=  ("FWD SONAR :\t") + String (bot_sen_sonar_fwd_ping) + "\t";    
@@ -88,9 +85,9 @@ void console_log(ASIZE delay)
     debug_msg += ("\n==== MOTORS ====\n#MOTOR\t\tCPS\t\tROT\t\tCNT\n");
     debug_msg +=  "Motor A\t\t" + String( mtr_sen_clicks_per_a * 4) + "\t\t" + String( mtr_sen_stat_a) +"\t\t" + String(mtr_sen_pos_a)+"\n"; 
     debug_msg +=  "Motor B\t\t" + String( mtr_sen_clicks_per_b * 4 )  + "\t\t" + String( mtr_sen_stat_b) +"\t\t" + String(mtr_sen_pos_b)+"\n"; 
-    debug_msg +=  "CTRL X:"+ String(botmsg.x) + " Z: " + String(botmsg.z) + " DeBug: " + String(botmsg.debug) + "\n"; 
-    
+    debug_msg +=  "CTRL X:"+ String(botmsg.x) + " Z: " + String(botmsg.z) + " CmD: " + String(botmsg.cmd) + "\n"; 
     PRINTF(debug_msg);
+
     //bot_sys_bt_conlog("Motor A\nRPM:" + String(mtr_sen_rpm_a) + "\nSPD: " + String (mtr_sen_speed_a) + "\nROT: " + String( mtr_sen_stat_a) +"\nPOS: " + String(mtr_sen_pos_a)+"\n");
     //bot_sys_bt_conlog("Motor B\nRPM:" + String(mtr_sen_rpm_b) + "\nSPD: " + String (mtr_sen_speed_b) + "\nROT: " + String( mtr_sen_stat_b) +"\nPOS: " + String(mtr_sen_pos_b)+"\n");
  
@@ -151,12 +148,6 @@ void init_1_led_heartbeat(void){
      pinMode(LED_HEARTBEAT_PIN, OUTPUT); 
 }
 
-void I2C_callback()
-{
-  myTransfer.rxObj(botmsg);  // what to do when we get an I2C msg
-  // Serial.println("I2C Callback");
-}
-const functionPtr callbackArr[] = { I2C_callback }; // Call back function pointer array. Orig lib Demo code says "persistent allocation required"
 
 /* LVL 3 INIT Functions */
 
@@ -213,13 +204,18 @@ void ir_ping(){
 }
 /* Level 5 Control Functions */
 
-void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
+void svc_BLE_conn (ASIZE delay){ // Internal BLE Data Exchange Service
   while(1){
-    // testing BLE. yeah I know.
-    receiveData();
-    displayData();
+    
+    receiveData(); // check BLE Serial device BLE Service Characteristics. New BLE data will be written there.
+    if (newData){ // update botmsg
+      botmsg.x = inputData.moveData.x;
+      botmsg.z = inputData.moveData.z;
+      strcpy(botmsg.cmd, inputData.moveData.cmd);     
+      // displayData();
+    }
  // remove above test code.
-
+/*
     txData.x               = botmsg.x; // Float. Currently demanded X. Feedback for ctrlmsg
     txData.z               = botmsg.z; // Float. Currently demanded Z. Feedback for ctrlmsg
     strcpy (txData.debug, "INFO"); // short logging message
@@ -231,11 +227,11 @@ void svc_I2C_conn (ASIZE delay){ // Internal I2C Data Exchange Service
     txData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
     txData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
     txData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
-  
+
     // botmsg.x =  rxData.x; 
     // botmsg.z =  rxData.z;
     // strcpy(botmsg.debug,rxData.debug);
-    
+  */  
     WAIT(delay);
   }
 }
@@ -347,7 +343,7 @@ void bot_bt_input(ASIZE delay){ // user input motion control from BT app
     Dabble.processInput(); //Refresh data obtained from BT Mod. Calling this function is mandatory in order to get data properly from the mobile.
     
     if (DEBUG){
-      Dabble.DabbleSerial->write("DATA0"); // Acts as serial device. Abstracts BLE Service & BLECharacteristic ffe0 on the HM10 module. Read by BLE board as BLE_UUID_SENSOR_DATA_SERVICE "ffe0"  & BLE_UUID_MULTI_SENSOR_DATA  "ffe1"
+      // Dabble.DabbleSerial->write("DATA0"); // Acts as serial device. Abstracts BLE Service & BLECharacteristic ffe0 on the HM10 module. Read by BLE board as BLE_UUID_SENSOR_DATA_SERVICE "ffe0"  & BLE_UUID_MULTI_SENSOR_DATA  "ffe1"
       //PinMonitor.sendDigitalData(); // DABBLE : This function sends all the digital pins state to the app. Currently causes hang. BUG TBD.
       //PinMonitor.sendAnalogData() ; // DABBLE : This function sends all the analog  pins state to the app
 
@@ -463,15 +459,6 @@ void setup()
 {
     system_init();
 
-// Setup I2C Comms with Serial Transfer Library  
-    Wire.begin(I2C_ADDR);
-    configST I2C_myConfig; 
-    I2C_myConfig.debug        = true;
-    I2C_myConfig.callbacks    = callbackArr;
-    I2C_myConfig.callbacksLen = sizeof(callbackArr) / sizeof(functionPtr);
-    myTransfer.begin(Wire, I2C_myConfig);
-
-
     printv = printkbuf;
     PRINTF("Howdy Console!\n");       
     #if ((MACHINE == MACH_AVR) || (MACHINE == MACH_ARM)) /* ARM is Teensy3.1 */ // <dpa> libtask set in task.h
@@ -494,7 +481,7 @@ void setup()
     
     // Level 1 Bot System Tasks
     
-    create_task((char *)"I2C",svc_I2C_conn,1, MINSTACK*4); // update UART connection with ROS2 Controler.
+    create_task((char *)"BLECON",svc_BLE_conn,1, MINSTACK*4); // refersh Serial BLE connection with ROS2 Controler.
     create_task((char *)"LED",led,200, MINSTACK); // heatbeat. kept as example of how to use semaphore setting and fetching with LMX
     create_task((char *)"FLASH",flash,800,MINSTACK); // Timing part of heatbeat. kept as example of how to use semaphore setting 
     create_task((char *)"CONLOG",console_log,5000,MINSTACK*2); // Dev logging to USB Serial output
