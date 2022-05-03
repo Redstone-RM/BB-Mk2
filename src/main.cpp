@@ -217,16 +217,16 @@ void svc_BLE_conn (ASIZE delay){ // Internal BLE Data Exchange Service
       // displayData(); // serial monitor output of new BLE data received
     }
     // populate the outgoing data struct with sensor data.
-    outputData.statusData.x = int(botmsg.x); // #TBD int to float convert
-    outputData.statusData.z = int(botmsg.z); // #TBD int to float convert
-    outputData.statusData.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
-    outputData.statusData.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
-    outputData.statusData.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
-    outputData.statusData.mtr_speed_left  = mtr_ctl_speed_b;  // motor b speed
-    outputData.statusData.sen_sonar_fwd   = bot_sen_sonar_fwd_ping; // forward sonar value
-    outputData.statusData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
-    outputData.statusData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
-    outputData.statusData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
+   // outputData.statusData.x = 12; // #TBD int to float convert
+   // outputData.statusData.z = 11; // #TBD int to float convert
+   // outputData.statusData.mtr_pos_right   = mtr_sen_pos_a; // right motor encoder position
+   // outputData.statusData.mtr_pos_left    = mtr_sen_pos_b;  // left motor encoder position
+   // outputData.statusData.mtr_speed_right = mtr_ctl_speed_a;  // motor a speed
+   // outputData.statusData.mtr_speed_left  = mtr_ctl_speed_b;  // motor b speed
+   // outputData.statusData.sen_sonar_fwd   = bot_sen_sonar_fwd_ping; // forward sonar value
+   // outputData.statusData.sen_sonar_rear  = bot_sen_sonar_rear_ping; // rear sonar value
+   // outputData.statusData.sen_ir_right    = bot_sen_ir_right_ping; // right IR value
+   // outputData.statusData.sen_ir_left     = bot_sen_ir_left_ping; // left IR value 
     sendBLEData();
 
     WAIT(delay);

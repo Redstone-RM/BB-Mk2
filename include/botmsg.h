@@ -18,7 +18,7 @@ struct moveItem {
     char cmd[3];                // 3       2 Chararter command variable
                                 //====
                                 // 11 Bytes  // Define this number as BLE_MSG_BYTESIZE
-};
+}__attribute__( ( packed ) );
 
 // Define a union joining the struct and a byte array of the same size
 union inputFromPC {  //  // The struct is overlaid on an array. The received data is copied byte by byte into pcLine and can then be used as, e.g. moveData.x
@@ -47,32 +47,36 @@ void receiveData() {   // Reads BLE_MSG_BYTESIZE Bytes of serial data.
    newData = true;
 }
 
+
+
 struct statusItem {
-    int x;                    // 2 bytes  X Twist status confirmation. A float to int conversion to save 2 BLE bytes since we're only confirming changes.
-    int z;                    // 2        Z Twist status confirmation. A float to int conversion to save 2 BLE bytes since we're only confirming changes.
-    int mtr_pos_right;        // 2
-    int mtr_pos_left;         // 2
-    int mtr_speed_right;      // 2
-    int mtr_speed_left;       // 2
-    int sen_sonar_fwd;        // 2
-    int sen_sonar_rear;       // 2
-    int sen_ir_right;         // 2
-    int sen_ir_left;          // 2
+  char msg[14];
+//    int x;                    // 2 bytes  X Twist status confirmation. A float to int conversion to save 2 BLE bytes since we're only confirming changes.
+//    int z;                    // 2        Z Twist status confirmation. A float to int conversion to save 2 BLE bytes since we're only confirming changes.
+//    int mtr_pos_right;        // 2
+//    int mtr_pos_left;         // 2
+//    int mtr_speed_right;      // 2
+//    int mtr_speed_left;       // 2
+//    int sen_sonar_fwd;        // 2
+//    int sen_sonar_rear;       // 2
+//    int sen_ir_right;         // 2
+//    int sen_ir_left;          // 2
                               //====
                               // 20 Bytes  // #define BLE_STATUS_BYTE_SIZE 20
-};
-#define BLE_STATUS_BYTE_SIZE 20
+}__attribute__( ( packed ) );
+
+
+#define BLE_STATUS_BYTE_SIZE 14
 byte statusData[BLE_STATUS_BYTE_SIZE]; 
 
 // Define a union joining the struct and a byte array of the same size
 union outputToPC {  //  // The struct is overlaid on an array. The received data is copied byte by byte into pcLine and can then be used as, e.g. moveData.x
    statusItem statusData;
-   byte bytes[BLE_STATUS_BYTE_SIZE]; 
+   uint8_t bytes[BLE_STATUS_BYTE_SIZE]; 
 };
 
 outputToPC outputData; // Create a working instance of the Union. Elements in it are referred to as, e.g. outputData.statusData.mtr_pos_right
-
-
+/*
 void sendBLEData() {   // SEND  serial data.
    if (Dabble.DabbleSerial->availableForWrite() < BLE_STATUS_BYTE_SIZE ) { // DabbleSerial provides a software serial interface for the HM10 BLE Module
      // TBD Handle this better. Error or serial buffer full for some reason. avoid blocking calls first check the amount of free space in the transmit buffer using availableForWrite().
@@ -82,7 +86,19 @@ void sendBLEData() {   // SEND  serial data.
       Dabble.DabbleSerial->write(outputData.bytes[n]); // Write bytes one at a time 
    }
 }
+*/
 
+void sendBLEData() {   // SEND  serial data.
+   if (Dabble.DabbleSerial->availableForWrite() < BLE_STATUS_BYTE_SIZE ) { // DabbleSerial provides a software serial interface for the HM10 BLE Module
+     // TBD Handle this better. Error or serial buffer full for some reason. avoid blocking calls first check the amount of free space in the transmit buffer using availableForWrite().
+     return;
+   }
+  // Dabble.DabbleSerial->write("<abcdefghijk>");  // Start and ending string markers  < string > 
+  // strcpy(outputData.statusData.msg, "<abcdefghijk>");
+  strcpy(outputData.statusData.msg, "<0123456789A>");
+  Dabble.DabbleSerial->write(outputData.bytes, sizeof(outputData.bytes)); // Write bytes 
+
+}
 
 void displayData() { // this is run when you want to dump the ble msg vars to the serial monitor.
   if (newData == false) {
@@ -97,12 +113,32 @@ void displayData() { // this is run when you want to dump the ble msg vars to th
     Serial.print(" ");
     Serial.println('>');
   }
+  // Serial.print("Struct: "  +  String(sizeof(outputData.statusData)) + " " +  String( sizeof(outputData.statusData.x)) );
   Serial.print("<BLE.Output.Status::: ");
-  Serial.print(outputData.statusData.x);
+ // Serial.print(outputData.statusData.x);
+ // Serial.print(" ");
+ // Serial.print(outputData.statusData.z);
+  /*
   Serial.print(" ");
-  Serial.print(outputData.statusData.z);
+  Serial.print(outputData.statusData.mtr_pos_right);
+  Serial.print(" ");
+  Serial.print(outputData.statusData.mtr_pos_left);
+  Serial.print(" ");
+  Serial.print(outputData.statusData.mtr_speed_right);
+  Serial.print(" ");
+  Serial.print(outputData.statusData.mtr_speed_left);
+  Serial.print(" ");
+  Serial.print(outputData.statusData.sen_sonar_fwd);
+  Serial.print(" ");
+  Serial.print(outputData.statusData.sen_ir_right);
+  Serial.print(" ");
+  Serial.print(outputData.statusData.sen_sonar_rear);
+  Serial.print(" ");
+  Serial.print(outputData.statusData.sen_ir_left);
+  */
   Serial.print(" ");
   Serial.println('>');
+
 
 
 }
